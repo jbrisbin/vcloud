@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2010 by J. Brisbin <jon@jbrisbin.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing
+ * permissions and limitations under the License.
+ */
+
 package com.jbrisbin.vcloud.session;
 
 import com.rabbitmq.client.*;
@@ -7,9 +23,7 @@ import org.apache.catalina.session.StoreBase;
 import org.apache.catalina.util.Base64;
 
 import java.io.*;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.*;
 
 /**
@@ -18,31 +32,39 @@ import java.util.concurrent.*;
  */
 public class CloudStore extends StoreBase {
 
-  public static final String INFO = "CloudStore/1.0";
-  public static final String NAME = "CloudStore";
+  static final String info = "CloudStore/1.0";
+  static final String name = "CloudStore";
 
   // RabbitMQ
-  private String mqHost = "localhost";
-  private int mqPort = 5672;
-  private String mqUser = "guest";
-  private String mqPassword = "guest";
-  private String mqVirtualHost = "/";
-  private int maxMqHandlers = 2;
-  private String eventsExchange = "amq.fanout";
-  private Connection mqConnection;
+  protected String mqHost = "localhost";
+  protected int mqPort = 5672;
+  protected String mqUser = "guest";
+  protected String mqPassword = "guest";
+  protected String mqVirtualHost = "/";
+  protected int maxMqHandlers = 2;
+  protected String eventsExchange = "amq.fanout";
+  protected String replicationEventsExchange = "amq.topic";
+  protected String replicationEventsQueue = null;
+  protected String eventsQueue = null;
+  protected String sourceEventsExchange = "amq.topic";
+  protected String sourceEventsQueue = null;
+  protected Connection mqConnection;
+  protected long loadTimeout = 15000L;
 
   // Unique store key to identify this node
-  private String storeKey;
+  protected String storeKey;
 
-  private ExecutorService workerPool = Executors.newCachedThreadPool();
-  private BlockingQueue<CloudSessionMessage> updateEvents = new LinkedBlockingQueue<CloudSessionMessage>();
-  private BlockingQueue<CloudSessionMessage> loadEvents = new LinkedBlockingQueue<CloudSessionMessage>();
-  private BlockingQueue<CloudSessionMessage> replicationEvents = new LinkedBlockingQueue<CloudSessionMessage>();
+  protected ExecutorService workerPool = Executors.newCachedThreadPool();
+  protected BlockingQueue<CloudSessionMessage> updateEvents = new LinkedBlockingQueue<CloudSessionMessage>();
+  protected BlockingQueue<CloudSessionMessage> loadEvents = new LinkedBlockingQueue<CloudSessionMessage>();
+  protected BlockingQueue<CloudSessionMessage> replicationEvents = new LinkedBlockingQueue<CloudSessionMessage>();
+  protected Timer timer = new Timer();
 
   // Local/private sessions
-  private ConcurrentHashMap<String, String> cloudSessions = new ConcurrentHashMap<String, String>();
-  private ConcurrentHashMap<String, CloudSession> localSessions = new ConcurrentHashMap<String, CloudSession>();
-  private ConcurrentHashMap<String, SessionLoader> sessionLoaders = new ConcurrentHashMap<String, SessionLoader>();
+  protected ConcurrentHashMap<String, String> cloudSessions = new ConcurrentHashMap<String, String>();
+  protected ConcurrentHashMap<String, CloudSession> localSessions = new ConcurrentHashMap<String, CloudSession>();
+  protected ConcurrentHashMap<String, SessionLoader> sessionLoaders = new ConcurrentHashMap<String, SessionLoader>();
+  protected ConcurrentHashMap<String, Future<Session>> sessionLoaderFutures = new ConcurrentHashMap<String, Future<Session>>();
 
   public String getMqHost() {
     return mqHost;
@@ -104,14 +126,80 @@ public class CloudStore extends StoreBase {
     return localSessions;
   }
 
+  public String getEventsQueue() {
+    return eventsQueue;
+  }
+
+  public void setEventsQueue(String eventsQueue) {
+    this.eventsQueue = eventsQueue;
+  }
+
+  public String getReplicationEventsExchange() {
+    return replicationEventsExchange;
+  }
+
+  public void setReplicationEventsExchange(String replicationEventsExchange) {
+    this.replicationEventsExchange = replicationEventsExchange;
+  }
+
+  public String getReplicationEventsQueue() {
+    return replicationEventsQueue;
+  }
+
+  public void setReplicationEventsQueue(String replicationEventsQueue) {
+    this.replicationEventsQueue = replicationEventsQueue;
+  }
+
+  public String getSourceEventsExchange() {
+    return sourceEventsExchange;
+  }
+
+  public void setSourceEventsExchange(String sourceEventsExchange) {
+    this.sourceEventsExchange = sourceEventsExchange;
+  }
+
+  public String getSourceEventsQueue() {
+    return sourceEventsQueue;
+  }
+
+  public void setSourceEventsQueue(String sourceEventsQueue) {
+    this.sourceEventsQueue = sourceEventsQueue;
+  }
+
+  public String getStoreKey() {
+    return storeKey;
+  }
+
+  public void setStoreKey(String storeKey) {
+    this.storeKey = storeKey;
+  }
+
+  /**
+   * Get session loader timeout.
+   *
+   * @return
+   */
+  public int getLoadTimeout() {
+    return (int) (loadTimeout / 1000);
+  }
+
+  /**
+   * Set session loader timeout (in seconds).
+   *
+   * @param loadTimeout
+   */
+  public void setLoadTimeout(int loadTimeout) {
+    this.loadTimeout = (long) (loadTimeout * 1000);
+  }
+
   @Override
   public String getInfo() {
-    return INFO;
+    return info;
   }
 
   @Override
   public String getStoreName() {
-    return NAME;
+    return name;
   }
 
   public int getSize() throws IOException {
@@ -122,9 +210,9 @@ public class CloudStore extends StoreBase {
     return cloudSessions.keySet().toArray(new String[getSize()]);
   }
 
-  public Session load(String s) throws ClassNotFoundException, IOException {
+  public Session load(String id) throws ClassNotFoundException, IOException {
     try {
-      return workerPool.submit(new SessionLoader()).get();
+      return workerPool.submit(new SessionLoader(id)).get();
     } catch (InterruptedException e) {
       manager.getContainer().getLogger().error(e.getMessage(), e);
     } catch (ExecutionException e) {
@@ -154,14 +242,47 @@ public class CloudStore extends StoreBase {
     cparams.setUsername(mqUser);
     cparams.setPassword(mqPassword);
     cparams.setVirtualHost(mqVirtualHost);
+    Channel mqChannel = null;
     try {
-      this.mqConnection = new ConnectionFactory(cparams).newConnection(mqHost, mqPort);
+      mqConnection = new ConnectionFactory(cparams).newConnection(mqHost, mqPort);
+      mqChannel = mqConnection.createChannel();
 
+      // Messages bound for all nodes in cluster go here
+      mqChannel.exchangeDeclare(eventsExchange, "fanout", true);
+      mqChannel.queueDeclare(eventsQueue, true);
+      mqChannel.queueBind(eventsQueue, eventsExchange, "");
+
+      // Messages bound for just this node go here
+      mqChannel.exchangeDeclare(sourceEventsExchange, "direct", true);
+      mqChannel.queueDeclare(sourceEventsQueue, true);
+      String sourceEventsRoutingKey = "session.events." + storeKey;
+      mqChannel.queueBind(sourceEventsQueue, sourceEventsExchange, sourceEventsRoutingKey);
+
+      // Replication events
+      mqChannel.exchangeDeclare(replicationEventsExchange, "topic", true);
+      mqChannel.queueDeclare(replicationEventsQueue, true);
+      mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, "replicate");
+
+      // Start several handlers to keep throughput high
       for (int i = 0; i < maxMqHandlers; i++) {
-        workerPool.submit(new SessionEventListener());
+        workerPool.submit(new SessionEventListener(eventsQueue));
+        workerPool.submit(new UpdateEventHandler());
+        workerPool.submit(new LoadEventHandler());
       }
+      // Only use one replication event handler
+      workerPool.submit(new ReplicationEventHandler());
+
+      // Keep the session loader pool clear of dead loaders
+      timer.scheduleAtFixedRate(new SessionLoaderScavenger(), loadTimeout, loadTimeout);
+
     } catch (IOException e) {
       manager.getContainer().getLogger().error(e.getMessage(), e);
+    } finally {
+      try {
+        mqChannel.close();
+      } catch (IOException e) {
+        // IGNORED
+      }
     }
   }
 
@@ -174,24 +295,24 @@ public class CloudStore extends StoreBase {
     }
   }
 
-  private void sendEvent(String type, byte[] body) throws IOException {
+  protected void sendEvent(String type, byte[] body) throws IOException {
     AMQP.BasicProperties props = new AMQP.BasicProperties();
     Map<String, Object> headers = new LinkedHashMap<String, Object>();
     headers.put("type", type);
     headers.put("source", storeKey);
     props.setHeaders(headers);
     Channel mqChannel = mqConnection.createChannel();
-    mqChannel.basicPublish(eventsExchange, "#", props, body);
+    mqChannel.basicPublish(eventsExchange, "", props, body);
     mqChannel.close();
   }
 
-  private String generateStoreKey() {
+  protected String generateStoreKey() {
     byte[] b = new byte[16];
     new Random().nextBytes(b);
     return new String(Base64.encode(b));
   }
 
-  private void serializeSessionToMessage(CloudSessionMessage msg) throws IOException {
+  protected void serializeSessionToMessage(CloudSessionMessage msg) throws IOException {
     if (localSessions.containsKey(msg.getId())) {
       CloudSession session = localSessions.get(msg.getId());
       ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
@@ -209,7 +330,7 @@ public class CloudStore extends StoreBase {
     }
   }
 
-  private CloudSession deserializeSessionFromMessage(
+  protected CloudSession deserializeSessionFromMessage(
       CloudSessionMessage msg) throws IOException, ClassNotFoundException {
     CloudSession session = (CloudSession) manager.createEmptySession();
     ByteArrayInputStream bytesIn = new ByteArrayInputStream(msg.getBody());
@@ -220,14 +341,15 @@ public class CloudStore extends StoreBase {
     return session;
   }
 
-  private class SessionEventListener implements Callable<SessionEventListener> {
+  protected class SessionEventListener implements Callable<SessionEventListener> {
 
-    private Channel mqChannel = null;
-    private QueueingConsumer eventsConsumer;
+    protected Channel mqChannel = null;
+    protected QueueingConsumer eventsConsumer;
 
-    private SessionEventListener() throws IOException {
+    protected SessionEventListener(String queue) throws IOException {
       mqChannel = mqConnection.createChannel();
       eventsConsumer = new QueueingConsumer(mqChannel);
+      mqChannel.basicConsume(queue, eventsConsumer);
     }
 
     public SessionEventListener call() throws Exception {
@@ -253,19 +375,14 @@ public class CloudStore extends StoreBase {
                 case LOAD:
                   id = new String(delivery.getBody());
                   msg = new CloudSessionMessage();
-                  msg.setType(headers.get("type").toString());
-                  msg.setId(headers.get("id").toString());
-                  String replyTo = delivery.getProperties().getReplyTo();
-                  if (null != replyTo && replyTo.contains("/")) {
-                    String[] s = replyTo.split("/");
-                    msg.setReplyToExchange(s[0]);
-                    msg.setReplyToRoutingKey(s[1]);
-                  }
+                  msg.setType("load");
+                  msg.setSource(source);
+                  msg.setId(id);
                   loadEvents.put(msg);
                   break;
                 case UPDATE:
                   msg = new CloudSessionMessage();
-                  msg.setType(headers.get("type").toString());
+                  msg.setType("update");
                   msg.setId(headers.get("id").toString());
                   msg.setBody(delivery.getBody());
                   updateEvents.add(msg);
@@ -274,6 +391,12 @@ public class CloudStore extends StoreBase {
                   cloudSessions.clear();
                   break;
                 case REPLICATE:
+                  id = new String(delivery.getBody());
+                  msg = new CloudSessionMessage();
+                  msg.setType("replicate");
+                  msg.setSource(source);
+                  msg.setId(id);
+                  replicationEvents.put(msg);
                   break;
               }
             }
@@ -285,9 +408,27 @@ public class CloudStore extends StoreBase {
     }
   }
 
-  private class UpdateEventHandler implements Callable<UpdateEventHandler> {
+  protected class ReplicationEventHandler implements Callable<ReplicationEventHandler> {
 
-    private Channel mqChannel = null;
+    protected Channel mqChannel = null;
+
+    public ReplicationEventHandler() throws IOException {
+      mqChannel = mqConnection.createChannel();
+    }
+
+    public ReplicationEventHandler call() throws Exception {
+      CloudSessionMessage msg;
+      while (null != (msg = replicationEvents.take())) {
+        CloudSession session = deserializeSessionFromMessage(msg);
+        localSessions.put(msg.getId(), session);
+      }
+      return this;
+    }
+  }
+
+  protected class UpdateEventHandler implements Callable<UpdateEventHandler> {
+
+    protected Channel mqChannel = null;
 
     public UpdateEventHandler() throws IOException {
       mqChannel = mqConnection.createChannel();
@@ -304,9 +445,9 @@ public class CloudStore extends StoreBase {
     }
   }
 
-  private class LoadEventHandler implements Callable<LoadEventHandler> {
+  protected class LoadEventHandler implements Callable<LoadEventHandler> {
 
-    private Channel mqChannel = null;
+    protected Channel mqChannel = null;
 
     public LoadEventHandler() throws IOException {
       mqChannel = mqConnection.createChannel();
@@ -324,22 +465,80 @@ public class CloudStore extends StoreBase {
         headers.put("source", storeKey);
         headers.put("id", msg.getId());
 
-        mqChannel.basicPublish(msg.getReplyToExchange(), msg.getReplyToRoutingKey(), props, msg.getBody());
+        mqChannel.basicPublish(sourceEventsExchange, "session.events." + msg.getSource(), props, msg.getBody());
       }
       return this;
     }
   }
 
-  private class SessionLoader implements Callable<CloudSession> {
+  protected class SessionLoader implements Callable<CloudSession> {
 
-    private BlockingQueue<CloudSession> responseQueue = new LinkedBlockingQueue<CloudSession>();
+    protected String id;
+    protected Channel mqChannel = null;
+    protected BlockingQueue<CloudSession> responseQueue = new LinkedBlockingQueue<CloudSession>();
+    protected long startTime;
+
+    protected SessionLoader(String id) throws IOException {
+      this.id = id;
+      mqChannel = mqConnection.createChannel();
+      startTime = System.currentTimeMillis();
+    }
+
+    public String getId() {
+      return id;
+    }
+
+    public long getStartTime() {
+      return startTime;
+    }
 
     public BlockingQueue<CloudSession> getResponseQueue() {
       return responseQueue;
     }
 
     public CloudSession call() throws Exception {
-      return responseQueue.take();
+      if (cloudSessions.containsKey(id)) {
+        AMQP.BasicProperties props = new AMQP.BasicProperties();
+        Map<String, Object> headers = new LinkedHashMap<String, Object>();
+        headers.put("type", "load");
+        headers.put("source", storeKey);
+
+        mqChannel.basicPublish(sourceEventsExchange,
+            "session.events." + cloudSessions.get(id).toString(),
+            props,
+            id.getBytes());
+        sessionLoaders.put(id, this);
+        CloudSession session = responseQueue.take();
+        close();
+
+        return session;
+      } else {
+        return null;
+      }
+    }
+
+    public void close() {
+      try {
+        mqChannel.close();
+      } catch (IOException e) {
+        // IGNORED
+      }
+    }
+  }
+
+  protected class SessionLoaderScavenger extends TimerTask {
+    public void run() {
+      for (SessionLoader loader : sessionLoaders.values()) {
+        long now = System.currentTimeMillis();
+        if ((now - loader.getStartTime()) > loadTimeout) {
+          sessionLoaders.remove(loader);
+          loader.close();
+          Future<Session> future = sessionLoaderFutures.remove(loader.getId());
+          if (!future.isDone()) {
+            future.cancel(true);
+          }
+        }
+      }
     }
   }
 }
