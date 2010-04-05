@@ -1,29 +1,28 @@
 package com.jbrisbin.vcloud.session;
 
-import org.apache.catalina.LifecycleEvent;
-import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.Session;
+import org.apache.catalina.*;
 import org.apache.catalina.session.ManagerBase;
 import org.apache.catalina.session.StandardSession;
+import org.apache.catalina.util.LifecycleSupport;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 import java.io.IOException;
 import java.util.HashMap;
 
 /**
- * Created by IntelliJ IDEA.
- * User: jbrisbin
- * Date: Apr 3, 2010
- * Time: 11:10:33 AM
- * To change this template use File | Settings | File Templates.
+ * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 3, 2010 Time: 11:10:33 AM To change this template use File |
+ * Settings | File Templates.
  */
-public class CloudManager extends ManagerBase implements LifecycleListener, PropertyChangeListener {
+public class CloudManager extends ManagerBase implements Lifecycle, PropertyChangeListener {
 
-  private static final String info = "CloudManager/1.0";
-  private static final String name = "CloudManager";
+  protected static final String info = "CloudManager/1.0";
+  protected static final String name = "CloudManager";
 
-  private CloudStore store;
+  protected CloudStore store;
+  protected LifecycleSupport lifecycle = new LifecycleSupport(this);
+  protected PropertyChangeSupport propertyChange = new PropertyChangeSupport(this);
 
   @Override
   public String getInfo() {
@@ -39,9 +38,9 @@ public class CloudManager extends ManagerBase implements LifecycleListener, Prop
     return store;
   }
 
-  public void setStore( CloudStore store ) {
+  public void setStore(CloudStore store) {
     this.store = store;
-    store.setManager( this );
+    store.setManager(this);
   }
 
   @Override
@@ -50,19 +49,19 @@ public class CloudManager extends ManagerBase implements LifecycleListener, Prop
   }
 
   @Override
-  public void add( Session session ) {
+  public void add(Session session) {
 
   }
 
   @Override
-  public Session createSession( String sessionId ) {
+  public Session createSession(String sessionId) {
     Session session = createEmptySession();
-    session.setNew( true );
-    session.setValid( true );
-    session.setCreationTime( System.currentTimeMillis() );
-    session.setMaxInactiveInterval( this.maxInactiveInterval );
-    if ( null == sessionId ) {
-      session.setId( generateSessionId() );
+    session.setNew(true);
+    session.setValid(true);
+    session.setCreationTime(System.currentTimeMillis());
+    session.setMaxInactiveInterval(this.maxInactiveInterval);
+    if (null == sessionId) {
+      session.setId(generateSessionId());
     }
     sessionCounter++;
     return session;
@@ -74,27 +73,29 @@ public class CloudManager extends ManagerBase implements LifecycleListener, Prop
   }
 
   @Override
-  public Session findSession( String id ) throws IOException {
-    if ( store.getLocalSessions().containsKey( id ) ) {
-      return store.getLocalSessions().get( id );
+  public Session findSession(String id) throws IOException {
+    if (store.getLocalSessions().containsKey(id)) {
+      return store.getLocalSessions().get(id);
     } else {
-      return null;
+      // Try to find it somewhere in the cloud
+
     }
+    return null;
   }
 
   @Override
   public Session[] findSessions() {
-    return store.getLocalSessions().
+    return null;
   }
 
   @Override
-  public void remove( Session session ) {
-    super.remove( session );    //To change body of overridden methods use File | Settings | File Templates.
+  public void remove(Session session) {
+    super.remove(session);    //To change body of overridden methods use File | Settings | File Templates.
   }
 
   @Override
   protected StandardSession getNewSession() {
-    return new CloudSession( this );
+    return new CloudSession(this);
   }
 
   @Override
@@ -103,59 +104,86 @@ public class CloudManager extends ManagerBase implements LifecycleListener, Prop
   }
 
   @Override
-  public String getSessionAttribute( String sessionId, String key ) {
-    return super.getSessionAttribute( sessionId,
-        key );    //To change body of overridden methods use File | Settings | File Templates.
+  public String getSessionAttribute(String sessionId, String key) {
+    return super.getSessionAttribute(sessionId,
+        key);    //To change body of overridden methods use File | Settings | File Templates.
   }
 
   @Override
-  public HashMap getSession( String sessionId ) {
+  public HashMap getSession(String sessionId) {
     return super
-        .getSession( sessionId );    //To change body of overridden methods use File | Settings | File Templates.
+        .getSession(sessionId);    //To change body of overridden methods use File | Settings | File Templates.
   }
 
   @Override
-  public void expireSession( String sessionId ) {
-    super.expireSession( sessionId );    //To change body of overridden methods use File | Settings | File Templates.
+  public void expireSession(String sessionId) {
+    super.expireSession(sessionId);    //To change body of overridden methods use File | Settings | File Templates.
   }
 
   @Override
-  public long getLastAccessedTimestamp( String sessionId ) {
+  public long getLastAccessedTimestamp(String sessionId) {
     return super.getLastAccessedTimestamp(
-        sessionId );    //To change body of overridden methods use File | Settings | File Templates.
+        sessionId);    //To change body of overridden methods use File | Settings | File Templates.
   }
 
   @Override
-  public String getLastAccessedTime( String sessionId ) {
+  public String getLastAccessedTime(String sessionId) {
     return super.getLastAccessedTime(
-        sessionId );    //To change body of overridden methods use File | Settings | File Templates.
+        sessionId);    //To change body of overridden methods use File | Settings | File Templates.
   }
 
   @Override
-  public String getCreationTime( String sessionId ) {
+  public String getCreationTime(String sessionId) {
     return super
-        .getCreationTime( sessionId );    //To change body of overridden methods use File | Settings | File Templates.
+        .getCreationTime(sessionId);    //To change body of overridden methods use File | Settings | File Templates.
   }
 
   @Override
-  public long getCreationTimestamp( String sessionId ) {
+  public long getCreationTimestamp(String sessionId) {
     return super.getCreationTimestamp(
-        sessionId );    //To change body of overridden methods use File | Settings | File Templates.
+        sessionId);    //To change body of overridden methods use File | Settings | File Templates.
   }
 
-  public void lifecycleEvent( LifecycleEvent lifecycleEvent ) {
-    //To change body of implemented methods use File | Settings | File Templates.
+  public void addLifecycleListener(LifecycleListener lifecycleListener) {
+    lifecycle.addLifecycleListener(lifecycleListener);
   }
 
-  public void propertyChange( PropertyChangeEvent propertyChangeEvent ) {
-    //To change body of implemented methods use File | Settings | File Templates.
+  public LifecycleListener[] findLifecycleListeners() {
+    return lifecycle.findLifecycleListeners();
+  }
+
+  public void removeLifecycleListener(LifecycleListener lifecycleListener) {
+    lifecycle.removeLifecycleListener(lifecycleListener);
+  }
+
+  public void start() throws LifecycleException {
+
+  }
+
+  public void stop() throws LifecycleException {
+
+  }
+
+  public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
+    if (!(propertyChangeEvent.getSource() instanceof Context)) {
+      // Ignore these
+      return;
+    }
+
+    if (propertyChangeEvent.getPropertyName().equals("sessionTimeout")) {
+      try {
+        setMaxInactiveInterval(Integer.parseInt(propertyChangeEvent.getNewValue().toString()) * 60);
+      } catch (NumberFormatException nfe) {
+        getContainer().getLogger().error(nfe.getMessage(), nfe);
+      }
+    }
   }
 
   public int getRejectedSessions() {
     return 0;  //To change body of implemented methods use File | Settings | File Templates.
   }
 
-  public void setRejectedSessions( int i ) {
+  public void setRejectedSessions(int i) {
     //To change body of implemented methods use File | Settings | File Templates.
   }
 
