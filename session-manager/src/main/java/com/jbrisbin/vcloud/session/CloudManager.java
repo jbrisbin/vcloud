@@ -20,25 +20,30 @@ import org.apache.catalina.*;
 import org.apache.catalina.session.ManagerBase;
 import org.apache.catalina.session.StandardSession;
 import org.apache.catalina.util.LifecycleSupport;
+import org.apache.juli.logging.Log;
+import org.apache.juli.logging.LogFactory;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 3, 2010 Time: 11:10:33 AM To change this template use File |
  * Settings | File Templates.
  */
-public class CloudManager extends ManagerBase implements Lifecycle, PropertyChangeListener {
+public class CloudManager extends ManagerBase implements Lifecycle, LifecycleListener, PropertyChangeListener {
 
   protected static final String info = "CloudManager/1.0";
   protected static final String name = "CloudManager";
 
+  protected Log log = LogFactory.getLog("vcloud");
   protected CloudStore store;
   protected LifecycleSupport lifecycle = new LifecycleSupport(this);
   protected PropertyChangeSupport propertyChange = new PropertyChangeSupport(this);
+  protected AtomicBoolean started = new AtomicBoolean(false);
 
   @Override
   public String getInfo() {
@@ -54,19 +59,21 @@ public class CloudManager extends ManagerBase implements Lifecycle, PropertyChan
     return store;
   }
 
-  public void setStore(CloudStore store) {
-    this.store = store;
-    store.setManager(this);
+  public void setStore(Store store) {
+    if (store instanceof CloudStore) {
+      this.store = (CloudStore) store;
+      store.setManager(this);
+    }
   }
 
   @Override
   public void processExpires() {
-
+    log.debug("processExpires()");
   }
 
   @Override
   public void add(Session session) {
-
+    log.debug("add(): " + session.toString());
   }
 
   @Override
@@ -78,6 +85,11 @@ public class CloudManager extends ManagerBase implements Lifecycle, PropertyChan
     session.setMaxInactiveInterval(this.maxInactiveInterval);
     if (null == sessionId) {
       session.setId(generateSessionId());
+    }
+    try {
+      store.save(session);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
     }
     sessionCounter++;
     return session;
@@ -94,7 +106,13 @@ public class CloudManager extends ManagerBase implements Lifecycle, PropertyChan
       return store.getLocalSessions().get(id);
     } else {
       // Try to find it somewhere in the cloud
-
+      try {
+        Session session = store.load(id);
+        log.debug("Returning loaded session: " + id);
+        return session;
+      } catch (ClassNotFoundException e) {
+        log.error(e.getMessage(), e);
+      }
     }
     return null;
   }
@@ -160,6 +178,12 @@ public class CloudManager extends ManagerBase implements Lifecycle, PropertyChan
         sessionId);    //To change body of overridden methods use File | Settings | File Templates.
   }
 
+  @Override
+  public void setContainer(Container container) {
+    super.setContainer(container);
+    log.debug("   ************** CONTAINER SET");
+  }
+
   public void addLifecycleListener(LifecycleListener lifecycleListener) {
     lifecycle.addLifecycleListener(lifecycleListener);
   }
@@ -172,12 +196,32 @@ public class CloudManager extends ManagerBase implements Lifecycle, PropertyChan
     lifecycle.removeLifecycleListener(lifecycleListener);
   }
 
-  public void start() throws LifecycleException {
+  public void lifecycleEvent(LifecycleEvent event) {
+    log.debug(event.toString());
+  }
 
+  public void start() throws LifecycleException {
+    log.debug("manager.start()");
+    if (started.get()) {
+      return;
+    }
+    lifecycle.fireLifecycleEvent(START_EVENT, null);
+    started.set(true);
+
+    try {
+      init();
+    } catch (Throwable t) {
+      log.error(t.getMessage(), t);
+    }
+
+    store.start();
   }
 
   public void stop() throws LifecycleException {
-
+    log.debug("manager.stop()");
+    lifecycle.fireLifecycleEvent(STOP_EVENT, null);
+    started.set(false);
+    store.stop();
   }
 
   public void propertyChange(PropertyChangeEvent propertyChangeEvent) {

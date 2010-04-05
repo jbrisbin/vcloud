@@ -19,7 +19,6 @@ package com.jbrisbin.vcloud.session;
 import org.apache.catalina.Manager;
 import org.apache.catalina.session.StandardSession;
 
-import java.security.Principal;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -47,61 +46,7 @@ public class CloudSession extends StandardSession {
   }
 
   @Override
-  public void setAuthType(String authType) {
-    super.setAuthType(authType);
-    setDirty(true);
-  }
-
-  @Override
-  public void setCreationTime(long time) {
-    super.setCreationTime(time);
-    setDirty(true);
-  }
-
-  @Override
-  public void setId(String id) {
-    super.setId(id);
-    setDirty(true);
-  }
-
-  @Override
-  public void setNew(boolean isNew) {
-    super.setNew(isNew);
-    setDirty(true);
-  }
-
-  @Override
-  public void setPrincipal(Principal principal) {
-    super.setPrincipal(principal);
-    setDirty(true);
-  }
-
-  @Override
-  public void setValid(boolean isValid) {
-    boolean before = isValid();
-    super.setValid(isValid);
-    if (isValid != before) {
-      setDirty(true);
-    }
-  }
-
-  @Override
-  public void setNote(String name, Object value) {
-    super.setNote(name, value);
-    setDirty(true);
-  }
-
-  @Override
-  public void setAttribute(String name, Object value) {
-    super.setAttribute(name, value);
-    setDirty(true);
-  }
-
-  @Override
-  public void setAttribute(String name, Object value, boolean notify) {
-    super.setAttribute(name,
-        value,
-        notify);
-    setDirty(true);
+  public String toString() {
+    return "CloudSession[" + getIdInternal() + "]";
   }
 }

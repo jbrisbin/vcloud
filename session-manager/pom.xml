@@ -11,7 +11,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <catalina.version>6.0.26</catalina.version>
+    <catalina.version>6.0.20</catalina.version>
     <rabbitmq.version>1.7.2</rabbitmq.version>
   </properties>
 
@@ -30,7 +30,17 @@
     </dependency>
     <dependency>
       <groupId>org.apache.tomcat</groupId>
+      <artifactId>catalina-ha</artifactId>
+      <version>${catalina.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tomcat</groupId>
       <artifactId>juli</artifactId>
+      <version>${catalina.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tomcat</groupId>
+      <artifactId>coyote</artifactId>
       <version>${catalina.version}</version>
     </dependency>
 
