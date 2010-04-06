@@ -23,17 +23,21 @@ import org.apache.catalina.util.LifecycleSupport;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 
+import javax.servlet.http.HttpSession;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 3, 2010 Time: 11:10:33 AM To change this template use File |
  * Settings | File Templates.
  */
+@SuppressWarnings({"unchecked"})
 public class CloudManager extends ManagerBase implements Lifecycle, LifecycleListener, PropertyChangeListener {
 
   protected static final String info = "CloudManager/1.0";
@@ -44,6 +48,7 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
   protected LifecycleSupport lifecycle = new LifecycleSupport(this);
   protected PropertyChangeSupport propertyChange = new PropertyChangeSupport(this);
   protected AtomicBoolean started = new AtomicBoolean(false);
+  protected AtomicInteger rejectedSessions = new AtomicInteger(0);
 
   @Override
   public String getInfo() {
@@ -68,12 +73,21 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
 
   @Override
   public void processExpires() {
-    log.debug("processExpires()");
+    if (log.isDebugEnabled()) {
+      log.debug("processExpires()");
+    }
   }
 
   @Override
   public void add(Session session) {
-    log.debug("add(): " + session.toString());
+    if (log.isDebugEnabled()) {
+      log.debug("add(): " + session.toString());
+    }
+    try {
+      store.save(session);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
   }
 
   @Override
@@ -85,13 +99,11 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
     session.setMaxInactiveInterval(this.maxInactiveInterval);
     if (null == sessionId) {
       session.setId(generateSessionId());
+      sessionCounter++;
+    } else {
+      session.setId(sessionId);
     }
-    try {
-      store.save(session);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
-    }
-    sessionCounter++;
+
     return session;
   }
 
@@ -107,9 +119,7 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
     } else {
       // Try to find it somewhere in the cloud
       try {
-        Session session = store.load(id);
-        log.debug("Returning loaded session: " + id);
-        return session;
+        return store.load(id);
       } catch (ClassNotFoundException e) {
         log.error(e.getMessage(), e);
       }
@@ -124,7 +134,11 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
 
   @Override
   public void remove(Session session) {
-    super.remove(session);    //To change body of overridden methods use File | Settings | File Templates.
+    try {
+      store.remove(session.getId());
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
   }
 
   @Override
@@ -139,14 +153,41 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
 
   @Override
   public String getSessionAttribute(String sessionId, String key) {
-    return super.getSessionAttribute(sessionId,
-        key);    //To change body of overridden methods use File | Settings | File Templates.
+    try {
+      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
+          .get(sessionId) : store.load(sessionId));
+      Object o = session.getSession().getAttribute(key);
+      if (o instanceof String) {
+        return (String) o;
+      } else {
+        return (null != o ? o.toString() : null);
+      }
+    } catch (ClassNotFoundException e) {
+      log.error(e.getMessage(), e);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
+    return null;
   }
 
   @Override
   public HashMap getSession(String sessionId) {
-    return super
-        .getSession(sessionId);    //To change body of overridden methods use File | Settings | File Templates.
+    try {
+      HttpSession session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
+          .get(sessionId) : store.load(sessionId)).getSession();
+      HashMap map = new HashMap();
+      String key = null;
+      for (Enumeration keys = session.getAttributeNames(); keys.hasMoreElements(); key = keys.nextElement()
+          .toString()) {
+        map.put(key, session.getAttribute(key));
+      }
+      return map;
+    } catch (ClassNotFoundException e) {
+      log.error(e.getMessage(), e);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
+    return null;
   }
 
   @Override
@@ -156,32 +197,63 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
 
   @Override
   public long getLastAccessedTimestamp(String sessionId) {
-    return super.getLastAccessedTimestamp(
-        sessionId);    //To change body of overridden methods use File | Settings | File Templates.
+    try {
+      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
+          .get(sessionId) : store.load(sessionId));
+      return session.getLastAccessedTime();
+    } catch (ClassNotFoundException e) {
+      log.error(e.getMessage(), e);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
+    return -1L;
   }
 
   @Override
   public String getLastAccessedTime(String sessionId) {
-    return super.getLastAccessedTime(
-        sessionId);    //To change body of overridden methods use File | Settings | File Templates.
+    try {
+      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
+          .get(sessionId) : store.load(sessionId));
+      return String.valueOf(session.getLastAccessedTime());
+    } catch (ClassNotFoundException e) {
+      log.error(e.getMessage(), e);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
+    return null;
   }
 
   @Override
   public String getCreationTime(String sessionId) {
-    return super
-        .getCreationTime(sessionId);    //To change body of overridden methods use File | Settings | File Templates.
+    try {
+      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
+          .get(sessionId) : store.load(sessionId));
+      return String.valueOf(session.getCreationTime());
+    } catch (ClassNotFoundException e) {
+      log.error(e.getMessage(), e);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
+    return null;
   }
 
   @Override
   public long getCreationTimestamp(String sessionId) {
-    return super.getCreationTimestamp(
-        sessionId);    //To change body of overridden methods use File | Settings | File Templates.
+    try {
+      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
+          .get(sessionId) : store.load(sessionId));
+      return session.getCreationTime();
+    } catch (ClassNotFoundException e) {
+      log.error(e.getMessage(), e);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
+    return -1L;
   }
 
   @Override
   public void setContainer(Container container) {
     super.setContainer(container);
-    log.debug("   ************** CONTAINER SET");
   }
 
   public void addLifecycleListener(LifecycleListener lifecycleListener) {
@@ -201,7 +273,9 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
   }
 
   public void start() throws LifecycleException {
-    log.debug("manager.start()");
+    if (log.isDebugEnabled()) {
+      log.debug("manager.start()");
+    }
     if (started.get()) {
       return;
     }
@@ -218,7 +292,9 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
   }
 
   public void stop() throws LifecycleException {
-    log.debug("manager.stop()");
+    if (log.isDebugEnabled()) {
+      log.debug("manager.stop()");
+    }
     lifecycle.fireLifecycleEvent(STOP_EVENT, null);
     started.set(false);
     store.stop();
@@ -240,18 +316,22 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
   }
 
   public int getRejectedSessions() {
-    return 0;  //To change body of implemented methods use File | Settings | File Templates.
+    return rejectedSessions.get();
   }
 
   public void setRejectedSessions(int i) {
-    //To change body of implemented methods use File | Settings | File Templates.
+    rejectedSessions.set(i);
   }
 
   public void load() throws ClassNotFoundException, IOException {
-    //To change body of implemented methods use File | Settings | File Templates.
+    if (log.isDebugEnabled()) {
+      log.debug("load()");
+    }
   }
 
   public void unload() throws IOException {
-    //To change body of implemented methods use File | Settings | File Templates.
+    if (log.isDebugEnabled()) {
+      log.debug("unload()");
+    }
   }
 }

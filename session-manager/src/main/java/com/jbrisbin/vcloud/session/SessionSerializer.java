@@ -16,22 +16,19 @@
 
 package com.jbrisbin.vcloud.session;
 
-import java.util.Map;
+import org.apache.catalina.Session;
+
+import java.io.IOException;
 
 /**
- * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 5, 2010 Time: 11:10:05 AM To change this template use File |
+ * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 6, 2010 Time: 8:32:53 AM To change this template use File |
  * Settings | File Templates.
  */
-public interface CloudStoreMBean {
+public interface SessionSerializer {
 
-  public int getUpdateEventsCount();
+  public Session getSession();
 
-  public int getLoadEventsCount();
+  public void setSession(Session session);
 
-  public int getReplicationEventsCount();
-
-  public String[] getLocalSessionIds();
-
-  public Map<String, String> getCloudSessionMap();
-
+  public byte[] serialize() throws IOException;
 }

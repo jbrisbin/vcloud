@@ -20,22 +20,26 @@ import com.rabbitmq.client.*;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Session;
 import org.apache.catalina.session.StoreBase;
-import org.apache.catalina.util.Base64;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.modeler.Registry;
 
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
-import java.io.*;
-import java.util.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.*;
 
 /**
  * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 2, 2010 Time: 5:20:28 PM To change this template use File |
  * Settings | File Templates.
  */
-public class CloudStore extends StoreBase implements CloudStoreMBean {
+public class CloudStore extends StoreBase {
 
   static final String info = "CloudStore/1.0";
   static final String name = "CloudStore";
@@ -71,6 +75,10 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
   // Local/private sessions
   protected ConcurrentHashMap<String, String> cloudSessions = new ConcurrentHashMap<String, String>();
   protected ConcurrentHashMap<String, CloudSession> localSessions = new ConcurrentHashMap<String, CloudSession>();
+  // Get session IDs
+  protected ConcurrentHashMap<String, SessionLoader> getIdsLoaders = new ConcurrentHashMap<String, SessionLoader>();
+  protected ConcurrentHashMap<String, Future<Session>> getIdsLoaderFutures = new ConcurrentHashMap<String, Future<Session>>();
+  // Get session data
   protected ConcurrentHashMap<String, SessionLoader> sessionLoaders = new ConcurrentHashMap<String, SessionLoader>();
   protected ConcurrentHashMap<String, Future<Session>> sessionLoaderFutures = new ConcurrentHashMap<String, Future<Session>>();
 
@@ -194,6 +202,10 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
     return replicationEvents.size();
   }
 
+  public String[] getCloudSessionIds() {
+    return cloudSessions.keySet().toArray(new String[cloudSessions.size()]);
+  }
+
   public String[] getLocalSessionIds() {
     return localSessions.keySet().toArray(new String[localSessions.size()]);
   }
@@ -242,9 +254,9 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
     try {
       return workerPool.submit(new SessionLoader(id)).get();
     } catch (InterruptedException e) {
-      manager.getContainer().getLogger().error(e.getMessage(), e);
+      log.error(e.getMessage(), e);
     } catch (ExecutionException e) {
-      manager.getContainer().getLogger().error(e.getMessage(), e);
+      log.error(e.getMessage(), e);
     }
     return null;
   }
@@ -262,8 +274,24 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
   }
 
   public void save(Session session) throws IOException {
-    localSessions.put(session.getId(), (CloudSession) session);
-    sendEvent("create", session.getId().getBytes());
+    if (!localSessions.containsKey(session.getId())) {
+      localSessions.put(session.getId(), (CloudSession) session);
+      sendEvent("touch", session.getId().getBytes());
+      // Replicate this session elsewhere
+      AMQP.BasicProperties props = new AMQP.BasicProperties();
+      Map<String, Object> headers = new LinkedHashMap<String, Object>();
+      headers.put("type", "replicate");
+      headers.put("source", storeId);
+
+      Channel mqChannel = mqConnection.createChannel();
+      SessionSerializer serializer = new InternalSessionSerializer();
+      serializer.setSession(session);
+      mqChannel.basicPublish(sourceEventsExchange,
+          "session.replication",
+          props,
+          serializer.serialize());
+      mqChannel.close();
+    }
   }
 
   @Override
@@ -296,11 +324,11 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
       // Replication events
       mqChannel.exchangeDeclare(replicationEventsExchange, "topic", true);
       mqChannel.queueDeclare(replicationEventsQueue, true);
-      mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, "session.replication." + storeId);
+      mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, "session.replication");
 
       // Start several handlers to keep throughput high
+      workerPool.submit(new SessionEventListener(eventsQueue));
       for (int i = 0; i < maxMqHandlers; i++) {
-        workerPool.submit(new SessionEventListener(eventsQueue));
         workerPool.submit(new SessionEventListener(sourceEventsQueue));
         workerPool.submit(new SessionEventListener(replicationEventsQueue));
         workerPool.submit(new UpdateEventHandler());
@@ -313,7 +341,7 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
       timer.scheduleAtFixedRate(new SessionLoaderScavenger(), loadTimeout, loadTimeout);
 
     } catch (IOException e) {
-      manager.getContainer().getLogger().error(e.getMessage(), e);
+      log.error(e.getMessage(), e);
     } finally {
       try {
         mqChannel.close();
@@ -323,12 +351,18 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
     }
 
     try {
+      sendEvent("getids", new byte[0]);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
+
+    try {
       objectName = new ObjectName("vCloud:type=SessionStore,id=" + storeId);
       Registry.getRegistry(null, null).registerComponent(this, objectName, null);
     } catch (MalformedObjectNameException e) {
-      manager.getContainer().getLogger().error(e.getMessage(), e);
+      log.error(e.getMessage(), e);
     } catch (Exception e) {
-      manager.getContainer().getLogger().error(e.getMessage(), e);
+      log.error(e.getMessage(), e);
     }
 
   }
@@ -338,9 +372,27 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
     try {
       this.mqConnection.close();
     } catch (IOException e) {
-      manager.getContainer().getLogger().error(e.getMessage(), e);
+      log.error(e.getMessage(), e);
     }
     Registry.getRegistry(null, null).unregisterComponent(objectName);
+  }
+
+  protected byte[] serializeLocalSessions() {
+    ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
+    try {
+      ObjectOutputStream objectOut = new ObjectOutputStream(bytesOut);
+      for (Map.Entry<String, CloudSession> entry : localSessions.entrySet()) {
+        entry.getValue().writeObjectData(objectOut);
+      }
+      objectOut.flush();
+      objectOut.close();
+
+      bytesOut.flush();
+      bytesOut.close();
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
+    return bytesOut.toByteArray();
   }
 
   protected void sendEvent(String type, byte[] body) throws IOException {
@@ -352,41 +404,6 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
     Channel mqChannel = mqConnection.createChannel();
     mqChannel.basicPublish(eventsExchange, "", props, body);
     mqChannel.close();
-  }
-
-  protected String generateStoreKey() {
-    byte[] b = new byte[16];
-    new Random().nextBytes(b);
-    return new String(Base64.encode(b));
-  }
-
-  protected void serializeSessionToMessage(CloudSessionMessage msg) throws IOException {
-    if (localSessions.containsKey(msg.getId())) {
-      CloudSession session = localSessions.get(msg.getId());
-      ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-      ObjectOutputStream objectOut = new ObjectOutputStream(bytesOut);
-      session.writeObjectData(objectOut);
-      objectOut.flush();
-      objectOut.close();
-      bytesOut.flush();
-      bytesOut.close();
-      localSessions.remove(msg.getId());
-      byte[] buff = bytesOut.toByteArray();
-      msg.setBody(buff);
-    } else {
-      msg.setBody(new byte[0]);
-    }
-  }
-
-  protected CloudSession deserializeSessionFromMessage(
-      CloudSessionMessage msg) throws IOException, ClassNotFoundException {
-    CloudSession session = (CloudSession) manager.createEmptySession();
-    ByteArrayInputStream bytesIn = new ByteArrayInputStream(msg.getBody());
-    ObjectInputStream objectIn = new ObjectInputStream(bytesIn);
-    session.readObjectData(objectIn);
-    session.setManager(manager);
-    localSessions.put(msg.getId(), session);
-    return session;
   }
 
   protected class SessionEventListener implements Callable<SessionEventListener> {
@@ -411,7 +428,7 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
             String id;
             CloudSessionMessage msg;
             switch (CloudSession.Events.valueOf(headers.get("type").toString().toUpperCase())) {
-              case CREATE:
+              case TOUCH:
                 id = new String(delivery.getBody());
                 cloudSessions.put(id, source);
                 break;
@@ -421,6 +438,9 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
                 break;
               case LOAD:
                 id = new String(delivery.getBody());
+                if (log.isDebugEnabled()) {
+                  log.debug("Received load request for " + id + " from " + source);
+                }
                 msg = new CloudSessionMessage();
                 msg.setType("load");
                 msg.setSource(source);
@@ -428,6 +448,9 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
                 loadEvents.put(msg);
                 break;
               case UPDATE:
+                if (log.isDebugEnabled()) {
+                  log.debug("Received update event from " + source);
+                }
                 msg = new CloudSessionMessage();
                 msg.setType("update");
                 msg.setId(headers.get("id").toString());
@@ -445,6 +468,12 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
               case CLEAR:
                 cloudSessions.clear();
                 break;
+              case GETALL:
+                workerPool.submit(new GetAllEventHandler(source));
+                break;
+              case GETIDS:
+                workerPool.submit(new GetIdsEventHandler());
+                break;
             }
           }
           mqChannel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
@@ -458,8 +487,15 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
     public ReplicationEventHandler call() throws Exception {
       CloudSessionMessage msg;
       while (null != (msg = replicationEvents.take())) {
-        CloudSession session = deserializeSessionFromMessage(msg);
-        localSessions.put(msg.getId(), session);
+        CloudSession session = (CloudSession) manager.createEmptySession();
+        SessionDeserializer deserializer = new InternalSessionDeserializer();
+        deserializer.setSession(session);
+        deserializer.setBytes(msg.getBody());
+        localSessions.put(session.getId(), session);
+        cloudSessions.put(session.getId(), msg.getSource());
+        if (log.isDebugEnabled()) {
+          log.debug("Replicated session " + msg.getId());
+        }
       }
       return this;
     }
@@ -469,11 +505,15 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
     public UpdateEventHandler call() throws Exception {
       CloudSessionMessage msg;
       while (null != (msg = updateEvents.take())) {
-        CloudSession session = deserializeSessionFromMessage(msg);
+        CloudSession session = (CloudSession) manager.createEmptySession();
+        SessionDeserializer deserializer = new InternalSessionDeserializer();
+        deserializer.setSession(session);
+        deserializer.setBytes(msg.getBody());
         if (sessionLoaders.containsKey(session.getId())) {
           SessionLoader loader = sessionLoaders.remove(session.getId());
           loader.getResponseQueue().add(session);
         }
+        localSessions.put(session.getId(), session);
       }
       return this;
     }
@@ -490,18 +530,87 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
     public LoadEventHandler call() throws Exception {
       CloudSessionMessage msg;
       while (null != (msg = loadEvents.take())) {
-        serializeSessionToMessage(msg);
+        if (localSessions.containsKey(msg.getId())) {
+          CloudSession session = localSessions.remove(msg.getId());
+          SessionSerializer serializer = new InternalSessionSerializer();
+          serializer.setSession(session);
+          msg.setBody(serializer.serialize());
 
-        AMQP.BasicProperties props = new AMQP.BasicProperties();
-        props.setContentType("application/octet-stream");
-        Map<String, Object> headers = new LinkedHashMap<String, Object>();
-        headers.put("type", "update");
-        headers.put("source", storeId);
-        headers.put("id", msg.getId());
+          AMQP.BasicProperties props = new AMQP.BasicProperties();
+          props.setContentType("application/octet-stream");
+          Map<String, Object> headers = new LinkedHashMap<String, Object>();
+          headers.put("type", "update");
+          headers.put("source", storeId);
+          headers.put("id", msg.getId());
 
-        mqChannel.basicPublish(sourceEventsExchange, "session.events." + msg.getSource(), props, msg.getBody());
+          mqChannel.basicPublish(sourceEventsExchange, "session.requests." + msg.getSource(), props, msg.getBody());
+        }
       }
       return this;
+    }
+
+    public void close() {
+      try {
+        mqChannel.close();
+      } catch (IOException e) {
+        // IGNORED
+      }
+    }
+  }
+
+  protected class GetAllEventHandler implements Callable<GetAllEventHandler> {
+
+    protected Channel mqChannel = null;
+    protected String source;
+
+    public GetAllEventHandler(String source) throws IOException {
+      mqChannel = mqConnection.createChannel();
+      this.source = source;
+    }
+
+    public GetAllEventHandler call() throws Exception {
+      for (Map.Entry<String, CloudSession> entry : localSessions.entrySet()) {
+        CloudSessionMessage msg = new CloudSessionMessage();
+        msg.setType("load");
+        msg.setSource(source);
+        msg.setId(entry.getKey());
+        loadEvents.put(msg);
+      }
+      close();
+      return this;
+    }
+
+    public void close() {
+      try {
+        mqChannel.close();
+      } catch (IOException e) {
+        // IGNORED
+      }
+    }
+  }
+
+  protected class GetIdsEventHandler implements Callable<GetIdsEventHandler> {
+
+    protected Channel mqChannel = null;
+
+    public GetIdsEventHandler() throws IOException {
+      mqChannel = mqConnection.createChannel();
+    }
+
+    public GetIdsEventHandler call() throws Exception {
+      for (Map.Entry<String, CloudSession> entry : localSessions.entrySet()) {
+        sendEvent("touch", entry.getKey().getBytes());
+      }
+      close();
+      return this;
+    }
+
+    public void close() {
+      try {
+        mqChannel.close();
+      } catch (IOException e) {
+        // IGNORED
+      }
     }
   }
 
@@ -538,12 +647,13 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
         headers.put("source", storeId);
 
         mqChannel.basicPublish(sourceEventsExchange,
-            "session.requests." + cloudSessions.get(id).toString(),
+            "session.requests." + cloudSessions.get(id),
             props,
             id.getBytes());
         sessionLoaders.put(id, this);
         CloudSession session = responseQueue.take();
         close();
+        localSessions.put(id, session);
 
         return session;
       } else {
@@ -565,11 +675,14 @@ public class CloudStore extends StoreBase implements CloudStoreMBean {
       for (SessionLoader loader : sessionLoaders.values()) {
         long now = System.currentTimeMillis();
         if ((now - loader.getStartTime()) > loadTimeout) {
-          sessionLoaders.remove(loader);
-          loader.close();
-          Future<Session> future = sessionLoaderFutures.remove(loader.getId());
-          if (!future.isDone()) {
-            future.cancel(true);
+          try {
+            sessionLoaders.remove(loader);
+            Future<Session> future = sessionLoaderFutures.remove(loader.getId());
+            if (null != future && !future.isDone()) {
+              future.cancel(true);
+            }
+          } catch (Throwable t) {
+            // IGNORED
           }
         }
       }

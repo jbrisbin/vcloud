@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class CloudSession extends StandardSession {
 
   public static enum Events {
-    CREATE, DESTROY, UPDATE, LOAD, CLEAR, REPLICATE
+    TOUCH, DESTROY, UPDATE, LOAD, CLEAR, REPLICATE, GETIDS, GETALL
   }
 
   private AtomicBoolean dirty = new AtomicBoolean(false);
