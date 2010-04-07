@@ -28,6 +28,7 @@ import java.util.Enumeration;
  * Time: 5:15:43 PM
  * To change this template use File | Settings | File Templates.
  */
+@SuppressWarnings({"deprecation"})
 public class CloudSessionFacade implements HttpSession {
 
   private CloudSession session;

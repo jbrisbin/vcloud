@@ -20,9 +20,9 @@ import com.rabbitmq.client.*;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Session;
 import org.apache.catalina.session.StoreBase;
-import org.apache.juli.logging.Log;
-import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.modeler.Registry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
@@ -44,7 +44,7 @@ public class CloudStore extends StoreBase {
   static final String info = "CloudStore/1.0";
   static final String name = "CloudStore";
 
-  protected Log log = LogFactory.getLog("vcloud");
+  protected Logger log = LoggerFactory.getLogger( getClass() );
   protected ObjectName objectName;
 
   // RabbitMQ
@@ -86,7 +86,7 @@ public class CloudStore extends StoreBase {
     return mqHost;
   }
 
-  public void setMqHost(String mqHost) {
+  public void setMqHost( String mqHost ) {
     this.mqHost = mqHost;
   }
 
@@ -94,7 +94,7 @@ public class CloudStore extends StoreBase {
     return mqPort;
   }
 
-  public void setMqPort(int mqPort) {
+  public void setMqPort( int mqPort ) {
     this.mqPort = mqPort;
   }
 
@@ -102,7 +102,7 @@ public class CloudStore extends StoreBase {
     return mqUser;
   }
 
-  public void setMqUser(String mqUser) {
+  public void setMqUser( String mqUser ) {
     this.mqUser = mqUser;
   }
 
@@ -110,7 +110,7 @@ public class CloudStore extends StoreBase {
     return mqPassword;
   }
 
-  public void setMqPassword(String mqPassword) {
+  public void setMqPassword( String mqPassword ) {
     this.mqPassword = mqPassword;
   }
 
@@ -118,7 +118,7 @@ public class CloudStore extends StoreBase {
     return mqVirtualHost;
   }
 
-  public void setMqVirtualHost(String mqVirtualHost) {
+  public void setMqVirtualHost( String mqVirtualHost ) {
     this.mqVirtualHost = mqVirtualHost;
   }
 
@@ -126,7 +126,7 @@ public class CloudStore extends StoreBase {
     return maxMqHandlers;
   }
 
-  public void setMaxMqHandlers(int maxMqHandlers) {
+  public void setMaxMqHandlers( int maxMqHandlers ) {
     this.maxMqHandlers = maxMqHandlers;
   }
 
@@ -134,7 +134,7 @@ public class CloudStore extends StoreBase {
     return eventsExchange;
   }
 
-  public void setEventsExchange(String eventsExchange) {
+  public void setEventsExchange( String eventsExchange ) {
     this.eventsExchange = eventsExchange;
   }
 
@@ -146,7 +146,7 @@ public class CloudStore extends StoreBase {
     return eventsQueue;
   }
 
-  public void setEventsQueue(String eventsQueue) {
+  public void setEventsQueue( String eventsQueue ) {
     this.eventsQueue = eventsQueue;
   }
 
@@ -154,7 +154,7 @@ public class CloudStore extends StoreBase {
     return replicationEventsExchange;
   }
 
-  public void setReplicationEventsExchange(String replicationEventsExchange) {
+  public void setReplicationEventsExchange( String replicationEventsExchange ) {
     this.replicationEventsExchange = replicationEventsExchange;
   }
 
@@ -162,7 +162,7 @@ public class CloudStore extends StoreBase {
     return replicationEventsQueue;
   }
 
-  public void setReplicationEventsQueue(String replicationEventsQueue) {
+  public void setReplicationEventsQueue( String replicationEventsQueue ) {
     this.replicationEventsQueue = replicationEventsQueue;
   }
 
@@ -170,7 +170,7 @@ public class CloudStore extends StoreBase {
     return sourceEventsExchange;
   }
 
-  public void setSourceEventsExchange(String sourceEventsExchange) {
+  public void setSourceEventsExchange( String sourceEventsExchange ) {
     this.sourceEventsExchange = sourceEventsExchange;
   }
 
@@ -178,7 +178,7 @@ public class CloudStore extends StoreBase {
     return sourceEventsQueue;
   }
 
-  public void setSourceEventsQueue(String sourceEventsQueue) {
+  public void setSourceEventsQueue( String sourceEventsQueue ) {
     this.sourceEventsQueue = sourceEventsQueue;
   }
 
@@ -186,7 +186,7 @@ public class CloudStore extends StoreBase {
     return storeId;
   }
 
-  public void setStoreId(String storeId) {
+  public void setStoreId( String storeId ) {
     this.storeId = storeId;
   }
 
@@ -203,11 +203,11 @@ public class CloudStore extends StoreBase {
   }
 
   public String[] getCloudSessionIds() {
-    return cloudSessions.keySet().toArray(new String[cloudSessions.size()]);
+    return cloudSessions.keySet().toArray( new String[cloudSessions.size()] );
   }
 
   public String[] getLocalSessionIds() {
-    return localSessions.keySet().toArray(new String[localSessions.size()]);
+    return localSessions.keySet().toArray( new String[localSessions.size()] );
   }
 
   public Map<String, String> getCloudSessionMap() {
@@ -228,7 +228,7 @@ public class CloudStore extends StoreBase {
    *
    * @param loadTimeout
    */
-  public void setLoadTimeout(int loadTimeout) {
+  public void setLoadTimeout( int loadTimeout ) {
     this.loadTimeout = (long) (loadTimeout * 1000);
   }
 
@@ -247,49 +247,49 @@ public class CloudStore extends StoreBase {
   }
 
   public String[] keys() throws IOException {
-    return cloudSessions.keySet().toArray(new String[getSize()]);
+    return cloudSessions.keySet().toArray( new String[getSize()] );
   }
 
-  public Session load(String id) throws ClassNotFoundException, IOException {
+  public Session load( String id ) throws ClassNotFoundException, IOException {
     try {
-      return workerPool.submit(new SessionLoader(id)).get();
-    } catch (InterruptedException e) {
-      log.error(e.getMessage(), e);
-    } catch (ExecutionException e) {
-      log.error(e.getMessage(), e);
+      return workerPool.submit( new SessionLoader( id ) ).get();
+    } catch ( InterruptedException e ) {
+      log.error( e.getMessage(), e );
+    } catch ( ExecutionException e ) {
+      log.error( e.getMessage(), e );
     }
     return null;
   }
 
-  public void remove(String id) throws IOException {
-    sendEvent("destroy", id.getBytes());
+  public void remove( String id ) throws IOException {
+    sendEvent( "destroy", id.getBytes() );
   }
 
   public void clear() throws IOException {
-    sendEvent("clear", new byte[0]);
+    sendEvent( "clear", new byte[0] );
   }
 
   public void clearLocalSessions() {
     localSessions.clear();
   }
 
-  public void save(Session session) throws IOException {
-    if (!localSessions.containsKey(session.getId())) {
-      localSessions.put(session.getId(), (CloudSession) session);
-      sendEvent("touch", session.getId().getBytes());
+  public void save( Session session ) throws IOException {
+    if ( !localSessions.containsKey( session.getId() ) ) {
+      localSessions.put( session.getId(), (CloudSession) session );
+      sendEvent( "touch", session.getId().getBytes() );
       // Replicate this session elsewhere
       AMQP.BasicProperties props = new AMQP.BasicProperties();
       Map<String, Object> headers = new LinkedHashMap<String, Object>();
-      headers.put("type", "replicate");
-      headers.put("source", storeId);
+      headers.put( "type", "replicate" );
+      headers.put( "source", storeId );
 
       Channel mqChannel = mqConnection.createChannel();
       SessionSerializer serializer = new InternalSessionSerializer();
-      serializer.setSession(session);
-      mqChannel.basicPublish(sourceEventsExchange,
+      serializer.setSession( session );
+      mqChannel.basicPublish( sourceEventsExchange,
           "session.replication",
           props,
-          serializer.serialize());
+          serializer.serialize() );
       mqChannel.close();
     }
   }
@@ -297,112 +297,113 @@ public class CloudStore extends StoreBase {
   @Override
   public void start() throws LifecycleException {
     super.start();
-    if (log.isDebugEnabled()) {
-      log.debug("Starting CloudStore: " + storeId);
+    if ( log.isDebugEnabled() ) {
+      log.debug( "Starting CloudStore: " + storeId );
     }
 
     ConnectionParameters cparams = new ConnectionParameters();
-    cparams.setUsername(mqUser);
-    cparams.setPassword(mqPassword);
-    cparams.setVirtualHost(mqVirtualHost);
+    cparams.setUsername( mqUser );
+    cparams.setPassword( mqPassword );
+    cparams.setVirtualHost( mqVirtualHost );
     Channel mqChannel = null;
     try {
-      mqConnection = new ConnectionFactory(cparams).newConnection(mqHost, mqPort);
+      mqConnection = new ConnectionFactory( cparams ).newConnection( mqHost, mqPort );
       mqChannel = mqConnection.createChannel();
 
       // Messages bound for all nodes in cluster go here
-      mqChannel.exchangeDeclare(eventsExchange, "fanout", true);
-      mqChannel.queueDeclare(eventsQueue, true);
-      mqChannel.queueBind(eventsQueue, eventsExchange, "");
+      mqChannel.exchangeDeclare( eventsExchange, "fanout", true );
+      mqChannel.queueDeclare( eventsQueue, true );
+      mqChannel.queueBind( eventsQueue, eventsExchange, "" );
 
       // Messages bound for just this node go here
-      mqChannel.exchangeDeclare(sourceEventsExchange, "direct", true);
-      mqChannel.queueDeclare(sourceEventsQueue, true);
-      String sourceEventsRoutingKey = "session.requests." + storeId;
-      mqChannel.queueBind(sourceEventsQueue, sourceEventsExchange, sourceEventsRoutingKey);
+      mqChannel.exchangeDeclare( sourceEventsExchange, "direct", true );
+      mqChannel.queueDeclare( sourceEventsQueue, true );
+      String sourceEventsRoutingKey = "vcloud.source.events." + storeId;
+      mqChannel.queueBind( sourceEventsQueue, sourceEventsExchange, sourceEventsRoutingKey );
 
       // Replication events
-      mqChannel.exchangeDeclare(replicationEventsExchange, "topic", true);
-      mqChannel.queueDeclare(replicationEventsQueue, true);
-      mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, "session.replication");
+      mqChannel.exchangeDeclare( replicationEventsExchange, "topic", true );
+      mqChannel.queueDeclare( replicationEventsQueue, true );
+      mqChannel.queueBind( replicationEventsQueue, replicationEventsExchange, "session.replication" );
 
       // Start several handlers to keep throughput high
-      workerPool.submit(new SessionEventListener(eventsQueue));
-      for (int i = 0; i < maxMqHandlers; i++) {
-        workerPool.submit(new SessionEventListener(sourceEventsQueue));
-        workerPool.submit(new SessionEventListener(replicationEventsQueue));
-        workerPool.submit(new UpdateEventHandler());
-        workerPool.submit(new LoadEventHandler());
+      workerPool.submit( new SessionEventListener( eventsQueue ) );
+      for ( int i = 0; i < maxMqHandlers; i++ ) {
+        workerPool.submit( new SessionEventListener( sourceEventsQueue ) );
+        workerPool.submit( new SessionEventListener( replicationEventsQueue ) );
+        workerPool.submit( new UpdateEventHandler() );
+        workerPool.submit( new LoadEventHandler() );
       }
       // Only use one replication event handler
-      workerPool.submit(new ReplicationEventHandler());
+      workerPool.submit( new ReplicationEventHandler() );
 
       // Keep the session loader pool clear of dead loaders
-      timer.scheduleAtFixedRate(new SessionLoaderScavenger(), loadTimeout, loadTimeout);
+      timer.scheduleAtFixedRate( new SessionLoaderScavenger(), loadTimeout, loadTimeout );
 
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     } finally {
       try {
         mqChannel.close();
-      } catch (IOException e) {
+      } catch ( IOException e ) {
         // IGNORED
       }
     }
 
     try {
-      sendEvent("getids", new byte[0]);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      sendEvent( "getids", new byte[0] );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
 
     try {
-      objectName = new ObjectName("vCloud:type=SessionStore,id=" + storeId);
-      Registry.getRegistry(null, null).registerComponent(this, objectName, null);
-    } catch (MalformedObjectNameException e) {
-      log.error(e.getMessage(), e);
-    } catch (Exception e) {
-      log.error(e.getMessage(), e);
+      objectName = new ObjectName( "vCloud:type=SessionStore,id=" + storeId );
+      Registry.getRegistry( null, null ).registerComponent( this, objectName, null );
+    } catch ( MalformedObjectNameException e ) {
+      log.error( e.getMessage(), e );
+    } catch ( Exception e ) {
+      log.error( e.getMessage(), e );
     }
 
   }
 
   @Override
   public void stop() throws LifecycleException {
+    workerPool.shutdownNow();
     try {
       this.mqConnection.close();
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
-    Registry.getRegistry(null, null).unregisterComponent(objectName);
+    Registry.getRegistry( null, null ).unregisterComponent( objectName );
   }
 
   protected byte[] serializeLocalSessions() {
     ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
     try {
-      ObjectOutputStream objectOut = new ObjectOutputStream(bytesOut);
-      for (Map.Entry<String, CloudSession> entry : localSessions.entrySet()) {
-        entry.getValue().writeObjectData(objectOut);
+      ObjectOutputStream objectOut = new ObjectOutputStream( bytesOut );
+      for ( Map.Entry<String, CloudSession> entry : localSessions.entrySet() ) {
+        entry.getValue().writeObjectData( objectOut );
       }
       objectOut.flush();
       objectOut.close();
 
       bytesOut.flush();
       bytesOut.close();
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
     return bytesOut.toByteArray();
   }
 
-  protected void sendEvent(String type, byte[] body) throws IOException {
+  protected void sendEvent( String type, byte[] body ) throws IOException {
     AMQP.BasicProperties props = new AMQP.BasicProperties();
     Map<String, Object> headers = new LinkedHashMap<String, Object>();
-    headers.put("type", type);
-    headers.put("source", storeId);
-    props.setHeaders(headers);
+    headers.put( "type", type );
+    headers.put( "source", storeId );
+    props.setHeaders( headers );
     Channel mqChannel = mqConnection.createChannel();
-    mqChannel.basicPublish(eventsExchange, "", props, body);
+    mqChannel.basicPublish( eventsExchange, "", props, body );
     mqChannel.close();
   }
 
@@ -411,72 +412,75 @@ public class CloudStore extends StoreBase {
     protected Channel mqChannel = null;
     protected QueueingConsumer eventsConsumer;
 
-    protected SessionEventListener(String queue) throws IOException {
+    protected SessionEventListener( String queue ) throws IOException {
       mqChannel = mqConnection.createChannel();
-      eventsConsumer = new QueueingConsumer(mqChannel);
-      mqChannel.basicConsume(queue, eventsConsumer);
+      eventsConsumer = new QueueingConsumer( mqChannel );
+      if ( log.isDebugEnabled() ) {
+        log.debug( "Consuming events on queue " + queue );
+      }
+      mqChannel.basicConsume( queue, eventsConsumer );
     }
 
     public SessionEventListener call() throws Exception {
       // Loop forever, processing incoming events
       QueueingConsumer.Delivery delivery;
-      while (null != (delivery = eventsConsumer.nextDelivery())) {
+      while ( null != (delivery = eventsConsumer.nextDelivery()) ) {
         Map<String, Object> headers = delivery.getProperties().getHeaders();
-        if (headers.containsKey("source")) {
-          String source = headers.get("source").toString();
-          if (headers.containsKey("type")) {
+        if ( headers.containsKey( "source" ) ) {
+          String source = headers.get( "source" ).toString();
+          if ( headers.containsKey( "type" ) ) {
             String id;
             CloudSessionMessage msg;
-            switch (CloudSession.Events.valueOf(headers.get("type").toString().toUpperCase())) {
+            switch ( CloudSession.Events.valueOf( headers.get( "type" ).toString().toUpperCase() ) ) {
               case TOUCH:
-                id = new String(delivery.getBody());
-                cloudSessions.put(id, source);
+                id = new String( delivery.getBody() );
+                cloudSessions.put( id, source );
                 break;
               case DESTROY:
-                id = new String(delivery.getBody());
-                cloudSessions.remove(id);
+                id = new String( delivery.getBody() );
+                cloudSessions.remove( id );
                 break;
               case LOAD:
-                id = new String(delivery.getBody());
-                if (log.isDebugEnabled()) {
-                  log.debug("Received load request for " + id + " from " + source);
+                id = new String( delivery.getBody() );
+                if ( log.isDebugEnabled() ) {
+                  log.debug( "Received load request for " + id + " from " + source );
                 }
                 msg = new CloudSessionMessage();
-                msg.setType("load");
-                msg.setSource(source);
-                msg.setId(id);
-                loadEvents.put(msg);
+                msg.setType( "load" );
+                msg.setSource( source );
+                msg.setId( id );
+                loadEvents.put( msg );
                 break;
               case UPDATE:
-                if (log.isDebugEnabled()) {
-                  log.debug("Received update event from " + source);
+                if ( log.isDebugEnabled() ) {
+                  log.debug( "Received update event from " + source );
                 }
                 msg = new CloudSessionMessage();
-                msg.setType("update");
-                msg.setId(headers.get("id").toString());
-                msg.setBody(delivery.getBody());
-                updateEvents.add(msg);
+                msg.setType( "update" );
+                msg.setId( headers.get( "id" ).toString() );
+                msg.setBody( delivery.getBody() );
+                updateEvents.add( msg );
                 break;
               case REPLICATE:
                 msg = new CloudSessionMessage();
-                msg.setType("replicate");
-                msg.setSource(source);
-                msg.setId(headers.get("id").toString());
-                msg.setBody(delivery.getBody());
-                replicationEvents.put(msg);
+                msg.setType( "replicate" );
+                msg.setSource( source );
+                msg.setId( headers.get( "id" ).toString() );
+                msg.setBody( delivery.getBody() );
+                replicationEvents.put( msg );
                 break;
               case CLEAR:
                 cloudSessions.clear();
                 break;
               case GETALL:
-                workerPool.submit(new GetAllEventHandler(source));
+                workerPool.submit( new GetAllEventHandler( source ) );
                 break;
               case GETIDS:
-                workerPool.submit(new GetIdsEventHandler());
+                workerPool.submit( new GetIdsEventHandler() );
                 break;
             }
           }
-          mqChannel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
+          mqChannel.basicAck( delivery.getEnvelope().getDeliveryTag(), false );
         }
       }
       return this;
@@ -486,15 +490,15 @@ public class CloudStore extends StoreBase {
   protected class ReplicationEventHandler implements Callable<ReplicationEventHandler> {
     public ReplicationEventHandler call() throws Exception {
       CloudSessionMessage msg;
-      while (null != (msg = replicationEvents.take())) {
+      while ( null != (msg = replicationEvents.take()) ) {
         CloudSession session = (CloudSession) manager.createEmptySession();
         SessionDeserializer deserializer = new InternalSessionDeserializer();
-        deserializer.setSession(session);
-        deserializer.setBytes(msg.getBody());
-        localSessions.put(session.getId(), session);
-        cloudSessions.put(session.getId(), msg.getSource());
-        if (log.isDebugEnabled()) {
-          log.debug("Replicated session " + msg.getId());
+        deserializer.setSession( session );
+        deserializer.setBytes( msg.getBody() );
+        localSessions.put( session.getId(), session );
+        cloudSessions.put( session.getId(), msg.getSource() );
+        if ( log.isDebugEnabled() ) {
+          log.debug( "Replicated session " + msg.getId() );
         }
       }
       return this;
@@ -504,16 +508,16 @@ public class CloudStore extends StoreBase {
   protected class UpdateEventHandler implements Callable<UpdateEventHandler> {
     public UpdateEventHandler call() throws Exception {
       CloudSessionMessage msg;
-      while (null != (msg = updateEvents.take())) {
+      while ( null != (msg = updateEvents.take()) ) {
         CloudSession session = (CloudSession) manager.createEmptySession();
         SessionDeserializer deserializer = new InternalSessionDeserializer();
-        deserializer.setSession(session);
-        deserializer.setBytes(msg.getBody());
-        if (sessionLoaders.containsKey(session.getId())) {
-          SessionLoader loader = sessionLoaders.remove(session.getId());
-          loader.getResponseQueue().add(session);
+        deserializer.setSession( session );
+        deserializer.setBytes( msg.getBody() );
+        if ( sessionLoaders.containsKey( session.getId() ) ) {
+          SessionLoader loader = sessionLoaders.remove( session.getId() );
+          loader.getResponseQueue().add( session );
         }
-        localSessions.put(session.getId(), session);
+        localSessions.put( session.getId(), session );
       }
       return this;
     }
@@ -529,21 +533,22 @@ public class CloudStore extends StoreBase {
 
     public LoadEventHandler call() throws Exception {
       CloudSessionMessage msg;
-      while (null != (msg = loadEvents.take())) {
-        if (localSessions.containsKey(msg.getId())) {
-          CloudSession session = localSessions.remove(msg.getId());
+      while ( null != (msg = loadEvents.take()) ) {
+        if ( localSessions.containsKey( msg.getId() ) ) {
+          CloudSession session = localSessions.remove( msg.getId() );
           SessionSerializer serializer = new InternalSessionSerializer();
-          serializer.setSession(session);
-          msg.setBody(serializer.serialize());
+          serializer.setSession( session );
+          msg.setBody( serializer.serialize() );
 
           AMQP.BasicProperties props = new AMQP.BasicProperties();
-          props.setContentType("application/octet-stream");
+          props.setContentType( "application/octet-stream" );
           Map<String, Object> headers = new LinkedHashMap<String, Object>();
-          headers.put("type", "update");
-          headers.put("source", storeId);
-          headers.put("id", msg.getId());
+          headers.put( "type", "update" );
+          headers.put( "source", storeId );
+          headers.put( "id", msg.getId() );
 
-          mqChannel.basicPublish(sourceEventsExchange, "session.requests." + msg.getSource(), props, msg.getBody());
+          mqChannel
+              .basicPublish( sourceEventsExchange, "vcloud.source.events." + msg.getSource(), props, msg.getBody() );
         }
       }
       return this;
@@ -552,7 +557,7 @@ public class CloudStore extends StoreBase {
     public void close() {
       try {
         mqChannel.close();
-      } catch (IOException e) {
+      } catch ( IOException e ) {
         // IGNORED
       }
     }
@@ -563,18 +568,18 @@ public class CloudStore extends StoreBase {
     protected Channel mqChannel = null;
     protected String source;
 
-    public GetAllEventHandler(String source) throws IOException {
+    public GetAllEventHandler( String source ) throws IOException {
       mqChannel = mqConnection.createChannel();
       this.source = source;
     }
 
     public GetAllEventHandler call() throws Exception {
-      for (Map.Entry<String, CloudSession> entry : localSessions.entrySet()) {
+      for ( Map.Entry<String, CloudSession> entry : localSessions.entrySet() ) {
         CloudSessionMessage msg = new CloudSessionMessage();
-        msg.setType("load");
-        msg.setSource(source);
-        msg.setId(entry.getKey());
-        loadEvents.put(msg);
+        msg.setType( "load" );
+        msg.setSource( source );
+        msg.setId( entry.getKey() );
+        loadEvents.put( msg );
       }
       close();
       return this;
@@ -583,7 +588,7 @@ public class CloudStore extends StoreBase {
     public void close() {
       try {
         mqChannel.close();
-      } catch (IOException e) {
+      } catch ( IOException e ) {
         // IGNORED
       }
     }
@@ -598,8 +603,8 @@ public class CloudStore extends StoreBase {
     }
 
     public GetIdsEventHandler call() throws Exception {
-      for (Map.Entry<String, CloudSession> entry : localSessions.entrySet()) {
-        sendEvent("touch", entry.getKey().getBytes());
+      for ( Map.Entry<String, CloudSession> entry : localSessions.entrySet() ) {
+        sendEvent( "touch", entry.getKey().getBytes() );
       }
       close();
       return this;
@@ -608,7 +613,7 @@ public class CloudStore extends StoreBase {
     public void close() {
       try {
         mqChannel.close();
-      } catch (IOException e) {
+      } catch ( IOException e ) {
         // IGNORED
       }
     }
@@ -621,7 +626,7 @@ public class CloudStore extends StoreBase {
     protected BlockingQueue<CloudSession> responseQueue = new LinkedBlockingQueue<CloudSession>();
     protected long startTime;
 
-    protected SessionLoader(String id) throws IOException {
+    protected SessionLoader( String id ) throws IOException {
       this.id = id;
       mqChannel = mqConnection.createChannel();
       startTime = System.currentTimeMillis();
@@ -640,20 +645,20 @@ public class CloudStore extends StoreBase {
     }
 
     public CloudSession call() throws Exception {
-      if (cloudSessions.containsKey(id)) {
+      if ( cloudSessions.containsKey( id ) ) {
         AMQP.BasicProperties props = new AMQP.BasicProperties();
         Map<String, Object> headers = new LinkedHashMap<String, Object>();
-        headers.put("type", "load");
-        headers.put("source", storeId);
+        headers.put( "type", "load" );
+        headers.put( "source", storeId );
 
-        mqChannel.basicPublish(sourceEventsExchange,
-            "session.requests." + cloudSessions.get(id),
+        mqChannel.basicPublish( sourceEventsExchange,
+            "vcloud.source.events." + cloudSessions.get( id ),
             props,
-            id.getBytes());
-        sessionLoaders.put(id, this);
+            id.getBytes() );
+        sessionLoaders.put( id, this );
         CloudSession session = responseQueue.take();
         close();
-        localSessions.put(id, session);
+        localSessions.put( id, session );
 
         return session;
       } else {
@@ -664,7 +669,7 @@ public class CloudStore extends StoreBase {
     public void close() {
       try {
         mqChannel.close();
-      } catch (IOException e) {
+      } catch ( IOException e ) {
         // IGNORED
       }
     }
@@ -672,16 +677,16 @@ public class CloudStore extends StoreBase {
 
   protected class SessionLoaderScavenger extends TimerTask {
     public void run() {
-      for (SessionLoader loader : sessionLoaders.values()) {
+      for ( SessionLoader loader : sessionLoaders.values() ) {
         long now = System.currentTimeMillis();
-        if ((now - loader.getStartTime()) > loadTimeout) {
+        if ( (now - loader.getStartTime()) > loadTimeout ) {
           try {
-            sessionLoaders.remove(loader);
-            Future<Session> future = sessionLoaderFutures.remove(loader.getId());
-            if (null != future && !future.isDone()) {
-              future.cancel(true);
+            sessionLoaders.remove( loader );
+            Future<Session> future = sessionLoaderFutures.remove( loader.getId() );
+            if ( null != future && !future.isDone() ) {
+              future.cancel( true );
             }
-          } catch (Throwable t) {
+          } catch ( Throwable t ) {
             // IGNORED
           }
         }
