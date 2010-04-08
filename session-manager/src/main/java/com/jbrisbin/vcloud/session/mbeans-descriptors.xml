@@ -70,6 +70,10 @@
                description="Clear all local sessions."
                impact="ACTION"
                returnType="void"/>
+    <operation name="getCloudSessionIds"
+               description="Get IDs for all cloud sessions."
+               impact="ACTION"
+               returnType="java.lang.String[]"/>
   </mbean>
 
 </mbeans-descriptors>

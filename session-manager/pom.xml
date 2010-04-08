@@ -11,7 +11,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <catalina.version>6.0.26</catalina.version>
+    <catalina.version>6.0.20</catalina.version>
     <rabbitmq.version>1.7.2</rabbitmq.version>
     <slf4j.version>1.5.8</slf4j.version>
   </properties>
@@ -24,6 +24,7 @@
 
   <dependencies>
 
+    <!-- Maybe someday I'll get to use SLF4J
     <dependency>
       <groupId>log4j</groupId>
       <artifactId>log4j</artifactId>
@@ -62,6 +63,7 @@
       <artifactId>jcl-over-slf4j</artifactId>
       <version>${slf4j.version}</version>
     </dependency>
+    -->
 
     <dependency>
       <groupId>org.apache.tomcat</groupId>
@@ -72,6 +74,12 @@
     <dependency>
       <groupId>org.apache.tomcat</groupId>
       <artifactId>coyote</artifactId>
+      <version>${catalina.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tomcat</groupId>
+      <artifactId>juli</artifactId>
       <version>${catalina.version}</version>
       <scope>provided</scope>
     </dependency>

@@ -18,6 +18,8 @@ package com.jbrisbin.vcloud.session;
 
 import org.apache.catalina.Session;
 import org.apache.catalina.session.StandardSession;
+import org.apache.catalina.util.CustomObjectInputStream;
+import org.apache.juli.logging.LogFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -31,6 +33,7 @@ public class InternalSessionDeserializer implements SessionDeserializer {
 
   protected byte[] bytes;
   protected Session session;
+  protected ClassLoader classLoader = null;
 
   public byte[] getBytes() {
     return this.bytes;
@@ -38,6 +41,10 @@ public class InternalSessionDeserializer implements SessionDeserializer {
 
   public void setBytes(byte[] bytes) {
     this.bytes = bytes;
+  }
+
+  public void setClassLoader(ClassLoader classLoader) {
+    this.classLoader = classLoader;
   }
 
   public Session getSession() {
@@ -55,11 +62,12 @@ public class InternalSessionDeserializer implements SessionDeserializer {
   public Session deserialize() throws IOException {
 
     ByteArrayInputStream bytesIn = new ByteArrayInputStream(bytes);
-    ObjectInputStream objectIn = new ObjectInputStream(bytesIn);
+    ObjectInputStream objectIn = (null != classLoader ? new CustomObjectInputStream(bytesIn,
+        classLoader) : new ObjectInputStream(bytesIn));
     try {
       ((StandardSession) session).readObjectData(objectIn);
     } catch (ClassNotFoundException e) {
-      throw new RuntimeException(e);
+      LogFactory.getLog(getClass()).error(e.getMessage(), e);
     }
     objectIn.close();
     bytesIn.close();

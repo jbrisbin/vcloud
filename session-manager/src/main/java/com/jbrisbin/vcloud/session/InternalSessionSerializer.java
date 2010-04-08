@@ -55,6 +55,6 @@ public class InternalSessionSerializer implements SessionSerializer {
     bytesOut.flush();
     bytesOut.close();
 
-    return new byte[0];  //To change body of implemented methods use File | Settings | File Templates.
+    return bytesOut.toByteArray();
   }
 }
