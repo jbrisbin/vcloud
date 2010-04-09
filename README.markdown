@@ -22,10 +22,10 @@ relying on sticky sessions.
 In either `META-INF/context.xml` or `$CATALINA_BASE/conf/Catalina/localhost/myapp.xml`
 configure the Manager and Store:
 
-<pre><code><Context path="/myapp" distributable="true">
-	<Manager className="com.jbrisbin.vcloud.session.CloudManager"
-					 maxInactiveInterval="900">
-		<Store className="com.jbrisbin.vcloud.session.CloudStore"
+<pre><code>&lt;Context path="/myapp" distributable="true"&gt;
+	&lt;Manager className="com.jbrisbin.vcloud.session.CloudManager"
+					 maxInactiveInterval="900"&gt;
+		&lt;Store className="com.jbrisbin.vcloud.session.CloudStore"
 					 mqHost="mq.cloud.mycompany.com"
 					 mqPort="5672"
 					 mqUser="cloud"
@@ -40,7 +40,7 @@ configure the Manager and Store:
 					 sourceEventsExchange="vcloud.source.events"
 					 sourceEventsQueue="vcloud.source.${store.id}"
 					 sourceEventsRoutingPrefix="vcloud.source."
-					 loadTimeout="15"/>
-	</Manager>
-</Context>
+					 loadTimeout="15"/&gt;
+	&lt;/Manager&gt;
+&lt;/Context&gt;
 </code></pre>
