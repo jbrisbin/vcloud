@@ -63,7 +63,7 @@ public class CloudStore extends StoreBase {
   protected String sourceEventsRoutingPrefix = "vcloud.source.";
   protected Connection mqConnection;
   protected long loadTimeout = 15;
-  protected boolean clearExchanges = true;
+  protected boolean deleteQueuesOnStop = true;
 
   // Unique store key to identify this node
   protected String storeId;
@@ -194,6 +194,14 @@ public class CloudStore extends StoreBase {
     this.sourceEventsQueue = sourceEventsQueue;
   }
 
+  public String getSourceEventsRoutingPrefix() {
+    return sourceEventsRoutingPrefix;
+  }
+
+  public void setSourceEventsRoutingPrefix(String sourceEventsRoutingPrefix) {
+    this.sourceEventsRoutingPrefix = sourceEventsRoutingPrefix;
+  }
+
   public String getStoreId() {
     return storeId;
   }
@@ -240,12 +248,12 @@ public class CloudStore extends StoreBase {
     this.loadTimeout = loadTimeout;
   }
 
-  public boolean isClearExchanges() {
-    return clearExchanges;
+  public boolean isDeleteQueuesOnStop() {
+    return deleteQueuesOnStop;
   }
 
-  public void setClearExchanges(boolean clearExchanges) {
-    this.clearExchanges = clearExchanges;
+  public void setDeleteQueuesOnStop(boolean deleteQueuesOnStop) {
+    this.deleteQueuesOnStop = deleteQueuesOnStop;
   }
 
   @Override
@@ -396,16 +404,13 @@ public class CloudStore extends StoreBase {
     setState("stopping");
     try {
       Channel mqChannel = mqConnection.createChannel();
-      if (clearExchanges) {
-        mqChannel.exchangeDelete(eventsExchange);
+      if (deleteQueuesOnStop) {
         mqChannel.queueDelete(eventsQueue);
       }
-      if (clearExchanges) {
-        mqChannel.exchangeDelete(sourceEventsExchange);
+      if (deleteQueuesOnStop) {
         mqChannel.queueDelete(sourceEventsQueue);
       }
-      if (clearExchanges) {
-        mqChannel.exchangeDelete(replicationEventsExchange);
+      if (deleteQueuesOnStop) {
         mqChannel.queueDelete(replicationEventsQueue);
       }
       // Make sure local sessions are replicated off this server
