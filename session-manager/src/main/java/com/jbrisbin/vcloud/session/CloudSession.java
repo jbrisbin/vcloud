@@ -32,6 +32,7 @@ public class CloudSession extends StandardSession {
   }
 
   private AtomicBoolean dirty = new AtomicBoolean(false);
+  private boolean replica = false;
 
   public CloudSession(Manager manager) {
     super(manager);
@@ -43,6 +44,14 @@ public class CloudSession extends StandardSession {
 
   public boolean isDirty() {
     return this.dirty.get();
+  }
+
+  public boolean isReplica() {
+    return replica;
+  }
+
+  public synchronized void setReplica(boolean replica) {
+    this.replica = replica;
   }
 
   @Override

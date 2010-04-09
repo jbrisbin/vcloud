@@ -511,6 +511,15 @@ public class CloudStore extends StoreBase {
                     synchronized (idSource) {
                       cloudSessions.put(id, source);
                     }
+                    // If someone else is claiming this, remove
+                    if (!idSource.equals(storeId) && localSessions.containsKey(id)) {
+                      CloudSession session = localSessions.get(id);
+                      if (!session.isReplica()) {
+                        synchronized (session) {
+                          localSessions.remove(id);
+                        }
+                      }
+                    }
                   } else {
                     cloudSessions.put(id, source);
                   }
@@ -618,6 +627,10 @@ public class CloudStore extends StoreBase {
           synchronized (sessionLoader) {
             sessionLoaders.remove(session.getId());
           }
+          session.setReplica(false);
+        } else {
+          // Assume this is a replication
+          session.setReplica(true);
         }
         save(session);
       }
@@ -653,9 +666,6 @@ public class CloudStore extends StoreBase {
           mqChannel
               .basicPublish(sourceEventsExchange, sourceEventsRoutingPrefix + msg.getSource(), props, msg.getBody());
 
-          synchronized (session) {
-            localSessions.remove(msg.getId());
-          }
         }
       }
       close();
