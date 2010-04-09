@@ -637,7 +637,7 @@ public class CloudStore extends StoreBase {
       CloudSessionMessage msg;
       while (null != (msg = loadEvents.take())) {
         if (localSessions.containsKey(msg.getId())) {
-          CloudSession session = localSessions.remove(msg.getId());
+          CloudSession session = localSessions.get(msg.getId());
           SessionSerializer serializer = new InternalSessionSerializer();
           serializer.setSession(session);
           msg.setBody(serializer.serialize());
@@ -652,6 +652,10 @@ public class CloudStore extends StoreBase {
 
           mqChannel
               .basicPublish(sourceEventsExchange, sourceEventsRoutingPrefix + msg.getSource(), props, msg.getBody());
+
+          synchronized (session) {
+            localSessions.remove(msg.getId());
+          }
         }
       }
       close();
