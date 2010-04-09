@@ -28,8 +28,10 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -144,7 +146,21 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
 
   @Override
   public Session[] findSessions() {
-    return null;
+    String[] ids = store.getCloudSessionIds();
+    List<Session> sessions = new ArrayList<Session>();
+    for (String id : ids) {
+      try {
+        Session sess = store.load(id);
+        if (null != sess) {
+          sessions.add(sess);
+        }
+      } catch (ClassNotFoundException e) {
+        log.error(e.getMessage(), e);
+      } catch (IOException e) {
+        log.error(e.getMessage(), e);
+      }
+    }
+    return sessions.toArray(new Session[sessions.size()]);
   }
 
   @Override
@@ -163,112 +179,123 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
 
   @Override
   public String listSessionIds() {
-    return super.listSessionIds();    //To change body of overridden methods use File | Settings | File Templates.
+    StringBuffer buff = new StringBuffer();
+    boolean needsComma = false;
+    for (String id : store.getCloudSessionIds()) {
+      if (needsComma) {
+        buff.append(", ");
+      } else {
+        needsComma = true;
+      }
+      buff.append(id);
+    }
+    return buff.toString();
   }
 
   @Override
   public String getSessionAttribute(String sessionId, String key) {
+    Session session = null;
     try {
-      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
-          .get(sessionId) : store.load(sessionId));
+      session = findSession(sessionId);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
+    if (null != session) {
       Object o = session.getSession().getAttribute(key);
       if (o instanceof String) {
         return (String) o;
       } else {
         return (null != o ? o.toString() : null);
       }
-    } catch (ClassNotFoundException e) {
-      log.error(e.getMessage(), e);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
     }
+
     return null;
   }
 
   @Override
   public HashMap getSession(String sessionId) {
+    Session session = null;
     try {
-      HttpSession session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
-          .get(sessionId) : store.load(sessionId)).getSession();
-      HashMap map = new HashMap();
-      String key = null;
-      for (Enumeration keys = session.getAttributeNames(); keys.hasMoreElements(); key = keys.nextElement()
-          .toString()) {
-        map.put(key, session.getAttribute(key));
-      }
-      return map;
-    } catch (ClassNotFoundException e) {
-      log.error(e.getMessage(), e);
+      session = findSession(sessionId);
     } catch (IOException e) {
       log.error(e.getMessage(), e);
     }
-    return null;
+    if (null != session) {
+      HttpSession httpSession = session.getSession();
+      HashMap map = new HashMap();
+      String key = null;
+      for (Enumeration keys = httpSession.getAttributeNames(); keys.hasMoreElements(); key = keys.nextElement()
+          .toString()) {
+        map.put(key, httpSession.getAttribute(key));
+      }
+      return map;
+    }
+    return new HashMap();
   }
 
   @Override
   public void expireSession(String sessionId) {
-    super.expireSession(sessionId);    //To change body of overridden methods use File | Settings | File Templates.
+    try {
+      store.remove(sessionId);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
   }
 
   @Override
   public long getLastAccessedTimestamp(String sessionId) {
+    Session session = null;
     try {
-      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
-          .get(sessionId) : store.load(sessionId));
-      return session.getLastAccessedTime();
-    } catch (ClassNotFoundException e) {
-      log.error(e.getMessage(), e);
+      session = findSession(sessionId);
     } catch (IOException e) {
       log.error(e.getMessage(), e);
+    }
+    if (null != session) {
+      return session.getLastAccessedTime();
     }
     return -1L;
   }
 
   @Override
   public String getLastAccessedTime(String sessionId) {
+    Session session = null;
     try {
-      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
-          .get(sessionId) : store.load(sessionId));
-      return String.valueOf(session.getLastAccessedTime());
-    } catch (ClassNotFoundException e) {
-      log.error(e.getMessage(), e);
+      session = findSession(sessionId);
     } catch (IOException e) {
       log.error(e.getMessage(), e);
+    }
+    if (null != session) {
+      return String.valueOf(session.getLastAccessedTime());
     }
     return null;
   }
 
   @Override
   public String getCreationTime(String sessionId) {
+    Session session = null;
     try {
-      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
-          .get(sessionId) : store.load(sessionId));
-      return String.valueOf(session.getCreationTime());
-    } catch (ClassNotFoundException e) {
-      log.error(e.getMessage(), e);
+      session = findSession(sessionId);
     } catch (IOException e) {
       log.error(e.getMessage(), e);
+    }
+    if (null != session) {
+      return String.valueOf(session.getCreationTime());
     }
     return null;
   }
 
   @Override
   public long getCreationTimestamp(String sessionId) {
+    Session session = null;
     try {
-      Session session = (store.getLocalSessions().containsKey(sessionId) ? store.getLocalSessions()
-          .get(sessionId) : store.load(sessionId));
-      return session.getCreationTime();
-    } catch (ClassNotFoundException e) {
-      log.error(e.getMessage(), e);
+      session = findSession(sessionId);
     } catch (IOException e) {
       log.error(e.getMessage(), e);
     }
+    if (null != session) {
+      return session.getCreationTime();
+    }
     return -1L;
-  }
-
-  @Override
-  public void setContainer(Container container) {
-    super.setContainer(container);
   }
 
   public void addLifecycleListener(LifecycleListener lifecycleListener) {
@@ -295,23 +322,21 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
       return;
     }
     lifecycle.fireLifecycleEvent(START_EVENT, null);
-    started.set(true);
-
     try {
       init();
     } catch (Throwable t) {
       log.error(t.getMessage(), t);
     }
-
     store.start();
+    started.set(true);
   }
 
   public void stop() throws LifecycleException {
     if (log.isDebugEnabled()) {
       log.debug("manager.stop()");
     }
-    lifecycle.fireLifecycleEvent(STOP_EVENT, null);
     started.set(false);
+    lifecycle.fireLifecycleEvent(STOP_EVENT, null);
     store.stop();
   }
 
