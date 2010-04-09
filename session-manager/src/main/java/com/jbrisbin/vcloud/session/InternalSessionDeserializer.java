@@ -26,13 +26,24 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 
 /**
- * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 6, 2010 Time: 8:38:20 AM To change this template use File |
- * Settings | File Templates.
+ * Re-constitute a user <b>StandardSession</b> subclass from a byte stream.
+ *
+ * @author J. Brisbin <jon@jbrisbin.com>
  */
 public class InternalSessionDeserializer implements SessionDeserializer {
 
+  /**
+   * The serialized byte that likely came from a RabbitMQ message.
+   */
   protected byte[] bytes;
+  /**
+   * Our <b>Session</b> object.
+   */
   protected Session session;
+  /**
+   * The ClassLoader to use while deserializing our Session. This is required to handle any custom objects you put in
+   * your session that aren't in the server's classpath.
+   */
   protected ClassLoader classLoader = null;
 
   public byte[] getBytes() {
@@ -51,6 +62,11 @@ public class InternalSessionDeserializer implements SessionDeserializer {
     return this.session;
   }
 
+  /**
+   * The session should be created in the caller's context and passed to the deserializer. We DO NOT create one!
+   *
+   * @param session
+   */
   public void setSession(Session session) {
     if (session instanceof StandardSession) {
       this.session = session;
@@ -59,6 +75,12 @@ public class InternalSessionDeserializer implements SessionDeserializer {
     }
   }
 
+  /**
+   * Turn our bytes into a real <b>Session</b> object.
+   *
+   * @return
+   * @throws IOException
+   */
   public Session deserialize() throws IOException {
 
     ByteArrayInputStream bytesIn = new ByteArrayInputStream(bytes);

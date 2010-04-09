@@ -24,11 +24,14 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 
 /**
- * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 6, 2010 Time: 8:34:08 AM To change this template use File |
- * Settings | File Templates.
+ * Convert's our <b>StandardSession</b> subclass into a byte array for inclusion in an MQ message.
+ *
+ * @author J. Brisbin <jon@jbrisbin.com>
  */
 public class InternalSessionSerializer implements SessionSerializer {
-
+  /**
+   * The session to serialize.
+   */
   protected Session session;
 
   public Session getSession() {
@@ -43,6 +46,12 @@ public class InternalSessionSerializer implements SessionSerializer {
     }
   }
 
+  /**
+   * Serialize the session into a byte array.
+   *
+   * @return
+   * @throws IOException
+   */
   public byte[] serialize() throws IOException {
 
     ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();

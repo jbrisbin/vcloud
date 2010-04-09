@@ -21,8 +21,9 @@ import org.apache.catalina.Session;
 import java.io.IOException;
 
 /**
- * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 6, 2010 Time: 8:32:53 AM To change this template use File |
- * Settings | File Templates.
+ * Generic interface for serializing sessions in case we want to do that differently later.
+ *
+ * @author J. Brisbin <jon@jbrisbin.com>
  */
 public interface SessionSerializer {
 

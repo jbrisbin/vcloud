@@ -36,20 +36,43 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 3, 2010 Time: 11:10:33 AM To change this template use File |
- * Settings | File Templates.
+ * Extends the <b>ManagerBase</b> class to provide cloud architecture awareness to Tomcat sessions.
+ *
+ * @author J. Brisbin <jon@jbrisbin.com>
  */
 @SuppressWarnings({"unchecked"})
 public class CloudManager extends ManagerBase implements Lifecycle, LifecycleListener, PropertyChangeListener {
 
+  /**
+   * Info about this implementation of a <b>Manager</b>.
+   */
   protected static final String info = "CloudManager/1.0";
+  /**
+   * Name of this implementation.
+   */
   protected static final String name = "CloudManager";
 
   protected Log log = LogFactory.getLog(getClass());
+  /**
+   * <b>Store</b> object to manage user sessions.
+   */
   protected CloudStore store;
+  /**
+   * We don't actually worry about lifecycle events directly, we delegate this to an internal <b>LifecycleSupport</b>
+   * object.
+   */
   protected LifecycleSupport lifecycle = new LifecycleSupport(this);
+  /**
+   * I'm not actually using this yet, though I don't know that I should yank it out of the source quite yet.
+   */
   protected PropertyChangeSupport propertyChange = new PropertyChangeSupport(this);
+  /**
+   * Is this <b>Manager</b> in a started state?
+   */
   protected AtomicBoolean started = new AtomicBoolean(false);
+  /**
+   * Not sure what this is supposed to be used for.
+   */
   protected AtomicInteger rejectedSessions = new AtomicInteger(0);
 
   @Override
@@ -62,10 +85,21 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
     return name;
   }
 
+  /**
+   * Get the <b>CloudStore</b> attached to this <b>Manager</b>.
+   *
+   * @return
+   */
   public CloudStore getStore() {
     return store;
   }
 
+  /**
+   * Set the <b>CloudStore</b> this <b>Manager</b> should use to maintain user sessions. Note that this is not the
+   * generic <b>Store</b> interface, but references the specific cloud-aware <b>Store</b>.
+   *
+   * @param store
+   */
   public void setStore(Store store) {
     if (store instanceof CloudStore) {
       this.store = (CloudStore) store;
@@ -124,13 +158,13 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
       // Try to find it somewhere in the cloud
       try {
         session = store.load(id);
+        // This part heavily-influenced by Tomcat's PersistentManagerBase
         if (null != session) {
           if (!session.isValid()) {
             session.expire();
             remove(session);
             return null;
           }
-
           session.setManager(this);
           ((StandardSession) session).tellNew();
           add(session);
@@ -298,22 +332,47 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
     return -1L;
   }
 
+  /**
+   * Delegate this to the internal <b>LifecycleSupport</b> object, which manages these things for us.
+   *
+   * @param lifecycleListener
+   */
   public void addLifecycleListener(LifecycleListener lifecycleListener) {
     lifecycle.addLifecycleListener(lifecycleListener);
   }
 
+  /**
+   * Delegate this to the internal <b>LifecycleSupport</b> object, which manages these things for us.
+   *
+   * @return
+   */
   public LifecycleListener[] findLifecycleListeners() {
     return lifecycle.findLifecycleListeners();
   }
 
+  /**
+   * Delegate this to the internal <b>LifecycleSupport</b> object, which manages these things for us.
+   *
+   * @param lifecycleListener
+   */
   public void removeLifecycleListener(LifecycleListener lifecycleListener) {
     lifecycle.removeLifecycleListener(lifecycleListener);
   }
 
+  /**
+   * Delegate this to the internal <b>LifecycleSupport</b> object, which manages these things for us.
+   *
+   * @param event
+   */
   public void lifecycleEvent(LifecycleEvent event) {
     log.debug(event.toString());
   }
 
+  /**
+   * Start the <b>Manager</b> and the underlying <b>CloudStore</b>.
+   *
+   * @throws LifecycleException
+   */
   public void start() throws LifecycleException {
     if (log.isDebugEnabled()) {
       log.debug("manager.start()");
@@ -331,6 +390,11 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
     started.set(true);
   }
 
+  /**
+   * Stop the <b>Manager</b> and the underlying <b>CloudStore</b>.
+   *
+   * @throws LifecycleException
+   */
   public void stop() throws LifecycleException {
     if (log.isDebugEnabled()) {
       log.debug("manager.stop()");
@@ -340,6 +404,11 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
     store.stop();
   }
 
+  /**
+   * We only care about changes to <code>sessionTimeout</code> properties at this point in time.
+   *
+   * @param propertyChangeEvent
+   */
   public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
     if (!(propertyChangeEvent.getSource() instanceof Context)) {
       // Ignore these
@@ -355,20 +424,41 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
     }
   }
 
+  /**
+   * Not really sure what this is supposed to do? :)
+   *
+   * @return
+   */
   public int getRejectedSessions() {
     return rejectedSessions.get();
   }
 
+  /**
+   * Not really sure what this is supposed to do? :)
+   *
+   * @param i
+   */
   public void setRejectedSessions(int i) {
     rejectedSessions.set(i);
   }
 
+  /**
+   * These aren't used at the moment, but I suspect replication events will be triggered by these methods.
+   *
+   * @throws ClassNotFoundException
+   * @throws IOException
+   */
   public void load() throws ClassNotFoundException, IOException {
     if (log.isDebugEnabled()) {
       log.debug("load()");
     }
   }
 
+  /**
+   * These aren't used at the moment, but I suspect replication events will be triggered by these methods.
+   *
+   * @throws IOException
+   */
   public void unload() throws IOException {
     if (log.isDebugEnabled()) {
       log.debug("unload()");

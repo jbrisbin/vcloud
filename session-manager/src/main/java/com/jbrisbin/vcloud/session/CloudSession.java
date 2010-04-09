@@ -22,16 +22,26 @@ import org.apache.catalina.session.StandardSession;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 2, 2010 Time: 5:04:00 PM To change this template use File |
- * Settings | File Templates.
+ * A custom implementation of the Tomcat <b>StandardSession</b> which adds some convenience features like a dirty flag
+ * and an enum for the differen event types.
+ *
+ * @author J. Brisbin <jon@jbrisbin.com>
  */
 public class CloudSession extends StandardSession {
-
+  /**
+   * Events related to sessions can be of several different types.
+   */
   public static enum Events {
     TOUCH, DESTROY, UPDATE, LOAD, CLEAR, REPLICATE, GETIDS, GETALL
   }
 
+  /**
+   * Whether anything has changed in this session, which might be useful for replication code.
+   */
   private AtomicBoolean dirty = new AtomicBoolean(false);
+  /**
+   * Is this session a copy of another one somewhere in the cloud?
+   */
   private boolean replica = false;
 
   public CloudSession(Manager manager) {
