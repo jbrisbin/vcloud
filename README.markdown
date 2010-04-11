@@ -12,35 +12,46 @@ relying on sticky sessions.
 ### Dependencies:
 
 * RabbitMQ Java client
-* vCloud Session Manager
+* commons-io
 
 ### Installation:
 
-1. Copy the `vcloud-session-manager-1.0.jar` to `$CATALINA_BASE/lib`.
-2. Copy RabbitMQ client jar to `$CATALINA_BASE/lib`.
+1. Copy the vcloud-session-manager-1.0.jar to $CATALINA_BASE/lib.
+2. Copy RabbitMQ client jar (1.7.2 or later) to $CATALINA_BASE/lib.
+3. Copy commons-io.jar (1.2 or later) to $CATALINA_BASE/lib.
 
-In either `META-INF/context.xml` or `$CATALINA_BASE/conf/Catalina/localhost/myapp.xml`
+In either the webapp META-INF/context.xml or $CATALINA_BASE/conf/Catalina/localhost/myapp.xml
 configure the Manager and Store:
 
-<pre><code>&lt;Context path="/myapp" distributable="true"&gt;
-	&lt;Manager className="com.jbrisbin.vcloud.session.CloudManager"
-					 maxInactiveInterval="900"&gt;
+<pre><code>&lt;Context&gt;
+
+	&lt;Manager className="com.jbrisbin.vcloud.session.CloudManager"&gt;
 		&lt;Store className="com.jbrisbin.vcloud.session.CloudStore"
-					 mqHost="mq.cloud.mycompany.com"
-					 mqPort="5672"
-					 mqUser="cloud"
-					 mqPassword="mypass"
-					 mqVirtualHost="/"
-					 storeId="${store.id}"
+					 storeId="${instance.id}"
+					 mqHost="${mq.host}"
+					 mqPort="${mq.port}"
+					 mqUser="${mq.user}"
+					 mqPassword="${mq.password}"
+					 mqVirtualHost="${mq.virtualhost}"
 					 eventsExchange="vcloud.session.events"
-					 eventsQueue="vcloud.session.${store.id}"
-					 replicationEventsExchange="vcloud.replication.events"
-					 replicationEventsQueue="vcloud.replication.${store.id}"
-					 replicationEventsRoutingKey="vcloud.session.replication"
+					 eventsQueue="vcloud.events.${instance.id}"
 					 sourceEventsExchange="vcloud.source.events"
-					 sourceEventsQueue="vcloud.source.${store.id}"
-					 sourceEventsRoutingPrefix="vcloud.source."
-					 loadTimeout="15"/&gt;
+					 sourceEventsQueue="vcloud.source.${instance.id}"
+					 replicationEventsExchange="vcloud.replication.events"
+					 replicationEventsQueue="vcloud.replication.${instance.id}"
+					 deleteQueuesOnStop="true"/&gt;
 	&lt;/Manager&gt;
+
 &lt;/Context&gt;
 </code></pre>
+
+The property "instance.id" in this example should be unique throughout the cloud. How you
+get a a cloud-unique name depends on your setup. I use convention over configuration, so
+I concatenate the external IP address with an instance id that's unique to that machine.
+
+The proper (durable) exchanges will be created and bound when the Store is started. The
+property "deleteQueuesOnStop" controls whether it should delete the queues for this node
+when the Store's stop() method is called. It defaults to true.
+
+Replication doesn't work yet. There are some logistical hurdles to jump before I have a
+solid failover system in place.
