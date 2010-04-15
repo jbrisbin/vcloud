@@ -7,8 +7,9 @@ given JMX MBean, JSON-serializing the result.
 * RabbitMQ AMQP Java client libraries (ver 1.7).
 * Jackson JSON Parser/Generator (ver 1.5).
 
-This gives remote management software to unobtrusively, and with minimal
-system overhead, monitor the JVMs of processes running in the cloud.
+This allows remote management software to unobtrusively, and with minimal
+system overhead, monitor the JVMs of processes running in the cloud without
+resorting to expensive and inefficient continuous-polling scenarios.
 
 Here's an example snippet from my server.xml file:
 
