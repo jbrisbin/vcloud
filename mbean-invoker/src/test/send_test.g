@@ -28,7 +28,7 @@ mq.exchange(name: "vcloud.events", type: "topic") {
 
 /*
 mq.exchange(name: "vcloud.events.mbean") {
-  queue(routingKey: "tcserver.server.instance") {
+  queue(routingKey: "tcserver.instance.id") {
     println "Sending messages to remote mbean..."
     publish body: {msg, out ->
       msg.properties.replyTo = "mbean.response"

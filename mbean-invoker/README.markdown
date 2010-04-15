@@ -14,24 +14,26 @@ resorting to expensive and inefficient continuous-polling scenarios.
 Here's an example snippet from my server.xml file:
 
 <pre><code>&lt;Listener className="com.jbrisbin.vcloud.mbean.CloudInvokerListener"
+          instanceName="instance.id"
+          eventsExchange="vcloud.events"
           mbeanEventsExchange="vcloud.events.mbean"
-          mbeanEventsQueue="mbean.events.server.instance"
-          mbeanEventsRoutingKey="tcserver.server.instance"/&gt;
+          mbeanEventsQueue="mbean.events.instance.id"
+          mbeanEventsRoutingKey="tcserver.instance.id"/&gt;
 </code></pre>
 
 There's a test file written in my RabbitMQ Groovy DSL to test this:
 
 <pre><code>mq.exchange(name: "vcloud.events.mbean") {
-  queue(routingKey: "tcserver.server.instance") {
+  queue(routingKey: "tcserver.instance.id") {
     println "Sending messages to remote mbean..."
     publish body: {msg, out -&gt;
-      msg.properties.replyTo = "vcloud.events,mbean.response"
+      msg.properties.replyTo = "mbean.response"
       out.write('{ "mbean": "java.lang:type=Runtime", "attribute": "VmName" }'.bytes)
       out.flush()
     }
 
     publish body: {msg, out ->
-      msg.properties.replyTo = "vcloud.events,mbean.response"
+      msg.properties.replyTo = "mbean.response"
       out.write('{ "mbean": "java.lang:type=Memory", "attribute": "HeapMemoryUsage" }'.bytes)
       out.flush()
     }
