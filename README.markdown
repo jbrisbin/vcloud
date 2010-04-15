@@ -1,10 +1,18 @@
 # vCloud Utilities
 
-NOTE: The only part of the vCloud Utilities yet finished is the RabbitMQ-based
-session replication for Apache Tomcat 6.0.
+## JMX MBean Invoker
+The mbean-invoker module provides a listener inside the Tomcat/tcServer instance
+that waits for messages telling it to invoke JMX operations or return the values of
+JMX attributes. Designed to be used in conjunction with monitor and management software
+to unobtrusively, and with minimal system overhead, manage a vcloud of Tomcat/tcServer
+nodes.
 
-## Non-multicast Session Clustering
+#### Dependencies ####
+* RabbitMQ AMQP Java client libraries (ver 1.7).
+* Jackson JSON Parser/Generator (ver 1.5).
 
+<hr/>
+## vCloud Session Clustering
 This module provides a session Manager and session Store that work in concert
 with RabbitMQ to provide session failover and cluster-wide load-balancing without
 relying on sticky sessions.
