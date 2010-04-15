@@ -11,7 +11,6 @@ nodes.
 * RabbitMQ AMQP Java client libraries (ver 1.7).
 * Jackson JSON Parser/Generator (ver 1.5).
 
-<hr/>
 ## vCloud Session Clustering
 This module provides a session Manager and session Store that work in concert
 with RabbitMQ to provide session failover and cluster-wide load-balancing without
