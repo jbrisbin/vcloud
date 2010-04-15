@@ -17,7 +17,6 @@ import javax.management.openmbean.CompositeDataSupport;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -58,15 +57,16 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
    * a different virtual host.
    */
   protected String mqVirtualHost = "/";
+  protected String instanceName = System.getenv( "HOSTNAME" );
   protected String eventsExchange = "amq.fanout";
   protected String eventsQueue = "events";
   protected String mbeanEventsExchange = "amq.topic";
   protected String mbeanEventsQueue = "events.mbean";
   protected String mbeanEventsRoutingKey = "#";
   protected Connection connection;
+  protected Channel channel;
   protected BlockingQueue<QueueingConsumer.Delivery> incoming = new LinkedBlockingQueue<QueueingConsumer.Delivery>();
   protected ExecutorService workerPool = Executors.newCachedThreadPool();
-  protected List<Future> invokers = new ArrayList<Future>();
 
   protected MBeanServer mbeanServer;
 
@@ -118,6 +118,14 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     this.mqVirtualHost = mqVirtualHost;
   }
 
+  public String getInstanceName() {
+    return instanceName;
+  }
+
+  public void setInstanceName( String instanceName ) {
+    this.instanceName = instanceName;
+  }
+
   public String getEventsExchange() {
     return eventsExchange;
   }
@@ -167,46 +175,75 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
   }
 
   public void lifecycleEvent( LifecycleEvent event ) {
-    // Wait until this server is fully-configured before connecting to RabbitMQ
-    if ( Lifecycle.AFTER_START_EVENT.equals( event.getType() ) ) {
-      if ( null == mbeanServer ) {
-        mbeanServer = MBeanUtils.createServer();
-        try {
-          ConnectionParameters params = new ConnectionParameters();
-          params.setUsername( mqUser );
-          params.setPassword( mqPassword );
-          params.setVirtualHost( mqVirtualHost );
-          if ( DEBUG ) {
-            log.debug( "Connecting to RabbitMQ server..." );
-          }
-          connection = new ConnectionFactory( params ).newConnection( mqHost, mqPort );
-          Channel channel = connection.createChannel();
-          // For generic cloud events (membership, etc...)
-          //channel.exchangeDeclare( eventsExchange, "fanout", true );
-          //channel.queueDeclare( eventsQueue, true );
-          //channel.queueBind( eventsQueue, eventsExchange, "" );
-          // For mbean events
-          if ( DEBUG ) {
-            log.debug( "Declaring exch: " + mbeanEventsExchange + ", q: " + mbeanEventsQueue );
-          }
-          channel.exchangeDeclare( mbeanEventsExchange, "topic", true );
-          channel.queueDeclare( mbeanEventsQueue, true );
-          if ( DEBUG ) {
-            log.debug( "Binding with key: " + mbeanEventsRoutingKey );
-          }
-          channel.queueBind( mbeanEventsQueue, mbeanEventsExchange, mbeanEventsRoutingKey );
-          channel.close();
-
-          workerPool.submit( new EventsHandler( mbeanEventsQueue ) );
-        } catch ( IOException e ) {
-          log.error( e.getMessage(), e );
+    if ( null == mbeanServer ) {
+      mbeanServer = MBeanUtils.createServer();
+    }
+    if ( null == connection ) {
+      try {
+        ConnectionParameters params = new ConnectionParameters();
+        params.setUsername( mqUser );
+        params.setPassword( mqPassword );
+        params.setVirtualHost( mqVirtualHost );
+        if ( DEBUG ) {
+          log.debug( "Connecting to RabbitMQ server..." );
         }
+        connection = new ConnectionFactory( params ).newConnection( mqHost, mqPort );
+        channel = connection.createChannel();
+
+        // For generic cloud events (membership, etc...)
+        if ( DEBUG ) {
+          log.debug( "Declaring exch: " + eventsExchange + ", q: " + eventsQueue );
+        }
+        //channel.exchangeDelete( eventsExchange );
+        channel.exchangeDeclare( eventsExchange, "topic", true );
+        //channel.queueDeclare( eventsQueue, false, true, false, true, null );
+        //channel.queueBind( eventsQueue, eventsExchange, "#" );
+
+        // For mbean events
+        if ( DEBUG ) {
+          log.debug(
+              "Declaring/binding exch: " + mbeanEventsExchange + ", q: " + mbeanEventsQueue + ", key: " + mbeanEventsRoutingKey );
+        }
+        //channel.exchangeDelete( mbeanEventsExchange );
+        channel.exchangeDeclare( mbeanEventsExchange, "direct", true );
+        channel.queueDeclare( mbeanEventsQueue, true );
+        channel.queueBind( mbeanEventsQueue, mbeanEventsExchange, mbeanEventsRoutingKey );
+
+      } catch ( IOException e ) {
+        log.error( e.getMessage(), e );
       }
     }
+
+    // Let cloud know about this Lifecycle event
+    AMQP.BasicProperties props = new AMQP.BasicProperties();
     try {
-      log.info( "Data: " + event.getData().toString() );
-    } catch ( Throwable t ) {
+      if ( DEBUG ) {
+        log.debug( "Attempting to notify cloud of " + event.getType() + " event..." );
+      }
+      channel.basicPublish( eventsExchange, event.getType() + "." + instanceName, props, event.getType().getBytes() );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
+
+    if ( Lifecycle.AFTER_START_EVENT.equals( event.getType() ) ) {
+      workerPool.submit( new EventsHandler( mbeanEventsQueue ) );
+    } else if ( Lifecycle.AFTER_STOP_EVENT.equals( event.getType() ) ) {
+      try {
+        if ( DEBUG ) {
+          log.debug( "Closing RabbitMQ channel..." );
+        }
+        channel.close();
+      } catch ( IOException e ) {
+      }
+      try {
+        if ( DEBUG ) {
+          log.debug( "Closing RabbitMQ connection..." );
+        }
+        connection.close();
+      } catch ( IOException e ) {
+      }
+    }
+
   }
 
   protected class EventsHandler implements Callable<EventsHandler> {
@@ -269,9 +306,16 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
               log.debug( "params: " + String.valueOf( o ) );
             }
             if ( null != o && o instanceof List ) {
-              for ( List<Object> param : ((List<List<Object>>) o) ) {
-                log.info( "param: " + param.toString() );
+              List<List<Object>> params = (List<List<Object>>) o;
+              String[] argTypes = new String[params.size()];
+              Object[] args = new Object[params.size()];
+              for ( int i = 0; i < params.size(); i++ ) {
+                List<Object> param = params.get( i );
+                argTypes[i] = param.get( 0 ).toString();
+                args[i] = param.get( 1 );
               }
+              invoker.setArgs( args );
+              invoker.setArgTypes( argTypes );
             }
           }
         }
@@ -429,8 +473,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       json.writeEndObject();
       json.flush();
 
-      String[] replyTo = getReplyTo().split( "," );
-      channel.basicPublish( replyTo[0], replyTo[1], props, bytesOut.toByteArray() );
+      channel.basicPublish( "", getReplyTo(), props, bytesOut.toByteArray() );
 
       return null;  //To change body of implemented methods use File | Settings | File Templates.
     }

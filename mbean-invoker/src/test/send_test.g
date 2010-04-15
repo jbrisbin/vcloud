@@ -4,35 +4,44 @@ mq.on error: {err ->
 
 mq {channel ->
   // Delete exchanges
-  //channel.exchangeDelete("vcloud.events.mbean")
-  //channel.queueDelete("events")
-  //channel.queueDelete("events.mbean")
-  //channel.queueDelete("events.server.instance")
 }
 
-mq.exchange(name: "vcloud.events", type: "direct") {
-  queue(name: null, routingKey: "mbean.response") {
+def members = []
+
+mq.exchange(name: "vcloud.events", type: "topic") {
+  queue(name: null, routingKey: "#") {
     consume onmessage: {msg ->
-      println "Response: ${msg.bodyAsString}"
+      def key = msg.envelope.routingKey
+      def msgBody = msg.bodyAsString
+      def source = msg.envelope.routingKey[msgBody.length() + 1..key.length() - 1]
+      println "Received ${msgBody} event from ${source}"
+      if ( msgBody == "start" ) {
+        members << source
+      } else if ( msgBody == "stop" ) {
+        members.remove(source)
+      }
+
       return true
     }
   }
 }
 
+/*
 mq.exchange(name: "vcloud.events.mbean") {
   queue(routingKey: "tcserver.server.instance") {
     println "Sending messages to remote mbean..."
     publish body: {msg, out ->
-      msg.properties.replyTo = "vcloud.events,mbean.response"
+      msg.properties.replyTo = "mbean.response"
       out.write('{ "mbean": "java.lang:type=Runtime", "attribute": "VmName" }'.bytes)
       out.flush()
     }
 
     publish body: {msg, out ->
-      msg.properties.replyTo = "vcloud.events,mbean.response"
+      msg.properties.replyTo = "mbean.response"
       out.write('{ "mbean": "java.lang:type=Memory", "attribute": "HeapMemoryUsage" }'.bytes)
       out.flush()
     }
   }
 }
+*/
 
