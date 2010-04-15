@@ -1,9 +1,9 @@
-= JMX MBean Invoker =
+# JMX MBean Invoker #
 This vcloud component can be installed into your Tomcat 6.0 server as a
 Listener. It will consume events on the queue you define and invoke the
 given JMX MBean, JSON-serializing the result.
 
-==== Dependencies ====
+#### Dependencies ####
 * RabbitMQ AMQP Java client libraries (ver 1.7).
 * Jackson JSON Parser/Generator (ver 1.5).
 
