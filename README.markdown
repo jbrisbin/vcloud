@@ -35,6 +35,7 @@ configure the Manager and Store:
 	&lt;Manager className="com.jbrisbin.vcloud.session.CloudManager"&gt;
 		&lt;Store className="com.jbrisbin.vcloud.session.CloudStore"
 					 storeId="${instance.id}"
+					 operationMode="replicated"
 					 mqHost="${mq.host}"
 					 mqPort="${mq.port}"
 					 mqUser="${mq.user}"
@@ -55,6 +56,17 @@ configure the Manager and Store:
 The property "instance.id" in this example should be unique throughout the cloud. How you
 get a a cloud-unique name depends on your setup. I use convention over configuration, so
 I concatenate the external IP address with an instance id that's unique to that machine.
+
+### NEW:
+
+The session manager is now configurable between two modes of operation: "allforone"
+and "replicated". "allforone" (maybe I should rename it "oneforall"...) is the default mode
+and has the behaviour mentioned in my blog post. One session exists within the cloud and it
+gets moved around from server to server. The mode "replicated" is different in that it always
+replicates the session to everyone. No matter what server your user lands on, their session
+will be there. Since its not really desireable to blindly replicate all sessions, all the time,
+I'm working on a third mode of operation that keeps track of MD5 hashes and will only replicate
+a session if it sees changes in the serialized object.
 
 The proper (durable) exchanges will be created and bound when the Store is started. The
 property "deleteQueuesOnStop" controls whether it should delete the queues for this node
