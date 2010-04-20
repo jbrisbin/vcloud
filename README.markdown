@@ -41,11 +41,11 @@ configure the Manager and Store:
            mqUser="${mq.user}"
            mqPassword="${mq.password}"
            mqVirtualHost="${mq.virtualhost}"
-           eventsExchange="vcloud.session.events"
+           eventsExchange="vcloud.events.session"
            eventsQueue="vcloud.events.${instance.id}"
-           sourceEventsExchange="vcloud.source.events"
+           sourceEventsExchange="vcloud.events.source"
            sourceEventsQueue="vcloud.source.${instance.id}"
-           replicationEventsExchange="vcloud.replication.events"
+           replicationEventsExchange="vcloud.events.replication"
            replicationEventsQueue="vcloud.replication.${instance.id}"
            deleteQueuesOnStop="true"/&gt;
   &lt;/Manager&gt;
@@ -56,7 +56,8 @@ configure the Manager and Store:
 
 The property "instance.id" in this example should be unique throughout the cloud. How you
 get a a cloud-unique name depends on your setup. I use convention over configuration, so
-I concatenate the external IP address with an instance id that's unique to that machine.
+I concatenate the external IP address with an instance id that's unique to that machine. An
+example would be "vm_172_23_10_13.TC1".
 
 ### NEW:
 
