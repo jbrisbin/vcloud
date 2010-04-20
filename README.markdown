@@ -32,23 +32,23 @@ configure the Manager and Store:
 
 <pre><code>&lt;Context&gt;
 
-	&lt;Manager className="com.jbrisbin.vcloud.session.CloudManager"&gt;
-		&lt;Store className="com.jbrisbin.vcloud.session.CloudStore"
-					 storeId="${instance.id}"
-					 operationMode="replicated"
-					 mqHost="${mq.host}"
-					 mqPort="${mq.port}"
-					 mqUser="${mq.user}"
-					 mqPassword="${mq.password}"
-					 mqVirtualHost="${mq.virtualhost}"
-					 eventsExchange="vcloud.session.events"
-					 eventsQueue="vcloud.events.${instance.id}"
-					 sourceEventsExchange="vcloud.source.events"
-					 sourceEventsQueue="vcloud.source.${instance.id}"
-					 replicationEventsExchange="vcloud.replication.events"
-					 replicationEventsQueue="vcloud.replication.${instance.id}"
-					 deleteQueuesOnStop="true"/&gt;
-	&lt;/Manager&gt;
+  &lt;Manager className="com.jbrisbin.vcloud.session.CloudManager"&gt;
+    &lt;Store className="com.jbrisbin.vcloud.session.CloudStore"
+              storeId="${instance.id}"
+              operationMode="replicated"
+              mqHost="${mq.host}"
+              mqPort="${mq.port}"
+              mqUser="${mq.user}"
+              mqPassword="${mq.password}"
+              mqVirtualHost="${mq.virtualhost}"
+              eventsExchange="vcloud.session.events"
+              eventsQueue="vcloud.events.${instance.id}"
+              sourceEventsExchange="vcloud.source.events"
+              sourceEventsQueue="vcloud.source.${instance.id}"
+              replicationEventsExchange="vcloud.replication.events"
+              replicationEventsQueue="vcloud.replication.${instance.id}"
+              deleteQueuesOnStop="true"/&gt;
+  &lt;/Manager&gt;
   &lt;Valve className="com.jbrisbin.vcloud.session.CloudSessionReplicationValve"/&gt;
 
 &lt;/Context&gt;
