@@ -49,6 +49,7 @@ configure the Manager and Store:
 					 replicationEventsQueue="vcloud.replication.${instance.id}"
 					 deleteQueuesOnStop="true"/&gt;
 	&lt;/Manager&gt;
+  &lt;Valve className="com.jbrisbin.vcloud.session.CloudSessionReplicationValve"/&gt;
 
 &lt;/Context&gt;
 </code></pre>
@@ -67,6 +68,8 @@ replicates the session to everyone. No matter what server your user lands on, th
 will be there. Since its not really desireable to blindly replicate all sessions, all the time,
 I'm working on a third mode of operation that keeps track of MD5 hashes and will only replicate
 a session if it sees changes in the serialized object.
+
+#### Note:
 
 The proper (durable) exchanges will be created and bound when the Store is started. The
 property "deleteQueuesOnStop" controls whether it should delete the queues for this node
