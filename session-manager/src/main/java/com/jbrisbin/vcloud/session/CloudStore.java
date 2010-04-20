@@ -22,9 +22,9 @@ import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Loader;
 import org.apache.catalina.Session;
 import org.apache.catalina.session.StoreBase;
-import org.apache.juli.logging.Log;
-import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.modeler.Registry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
@@ -51,7 +51,11 @@ public class CloudStore extends StoreBase {
    */
   static final String name = "CloudStore";
 
-  protected Log log = LogFactory.getLog(getClass());
+  static enum Mode {
+    ALLFORONE, REPLICATED
+  }
+
+  protected Logger log = LoggerFactory.getLogger(getClass());
   /**
    * <b>ObjectName</b> we'll register ourself under in JMX so we can interact directly with the store.
    */
@@ -135,6 +139,10 @@ public class CloudStore extends StoreBase {
    * The length of time (in seconds) until a loader is considered dead.
    */
   protected long loadTimeout = 15;
+  /**
+   * What mode to operate in. One of "allforone" or "replicated".
+   */
+  protected Mode operationMode = Mode.ALLFORONE;
   /**
    * Should I clean up after myself and delete all my queues when this store shuts down?
    */
@@ -335,6 +343,14 @@ public class CloudStore extends StoreBase {
     return sessionLoaders.size();
   }
 
+  public void setOperationMode(String opMode) {
+    this.operationMode = Mode.valueOf(opMode.toUpperCase());
+  }
+
+  public Mode getOperationMode() {
+    return this.operationMode;
+  }
+
   /**
    * Retrieve a list of all session IDs (valid or not) on any node within the cloud.
    *
@@ -495,7 +511,9 @@ public class CloudStore extends StoreBase {
       log.debug("save(): Saved session " + session.getId());
     }
     sendEvent("touch", session.getId().getBytes());
-    //replicateSession( session );
+    if (operationMode.equals(Mode.REPLICATED)) {
+      replicateSession(session);
+    }
   }
 
   /**
@@ -517,10 +535,13 @@ public class CloudStore extends StoreBase {
     Channel mqChannel = mqConnection.createChannel();
     SessionSerializer serializer = new InternalSessionSerializer();
     serializer.setSession(session);
-    mqChannel.basicPublish(sourceEventsExchange,
-        sourceEventsRoutingPrefix + "#",
-        props,
-        serializer.serialize());
+    if (operationMode.equals(Mode.REPLICATED)) {
+      // Blast this to everyone
+      mqChannel.basicPublish(eventsExchange, "", props, serializer.serialize());
+    } else {
+      // Replicate off-node
+      mqChannel.basicPublish(replicationEventsExchange, replicationEventsRoutingKey, props, serializer.serialize());
+    }
     mqChannel.close();
   }
 
@@ -552,9 +573,9 @@ public class CloudStore extends StoreBase {
       mqChannel.queueBind(sourceEventsQueue, sourceEventsExchange, sourceEventsRoutingKey);
 
       // Replication events
-      //mqChannel.exchangeDeclare( replicationEventsExchange, "topic", true );
-      //mqChannel.queueDeclare( replicationEventsQueue, true );
-      //mqChannel.queueBind( replicationEventsQueue, replicationEventsExchange, replicationEventsRoutingKey );
+      mqChannel.exchangeDeclare(replicationEventsExchange, "topic", true);
+      mqChannel.queueDeclare(replicationEventsQueue, true);
+      mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, replicationEventsRoutingKey);
 
       workers.add(workerPool.submit(new SessionEventListener()));
       for (int i = 0; i < maxMqHandlers; i++) {
@@ -564,7 +585,7 @@ public class CloudStore extends StoreBase {
 
       // Keep the session loader pool clear of dead loaders
       long timeout = ((long) (loadTimeout * 1000));
-      //timer.scheduleAtFixedRate( new SessionLoaderScavenger(), timeout, timeout );
+      timer.scheduleAtFixedRate(new SessionLoaderScavenger(), timeout, timeout);
 
     } catch (IOException e) {
       log.error(e.getMessage(), e);
@@ -685,11 +706,11 @@ public class CloudStore extends StoreBase {
 
       eventsConsumer = new QueueingConsumer(channel, incoming);
       sourceEventsConsumer = new QueueingConsumer(channel, incoming);
-      //replicationEventsConsumer = new QueueingConsumer( channel, incoming );
+      replicationEventsConsumer = new QueueingConsumer(channel, incoming);
 
       channel.basicConsume(eventsQueue, false, "events." + storeId, eventsConsumer);
       channel.basicConsume(sourceEventsQueue, false, "source." + storeId, sourceEventsConsumer);
-      //channel.basicConsume( replicationEventsQueue, false, "replication." + storeId, replicationEventsConsumer );
+      channel.basicConsume(replicationEventsQueue, false, "replication." + storeId, replicationEventsConsumer);
     }
 
     /**
@@ -717,9 +738,12 @@ public class CloudStore extends StoreBase {
                 case TOUCH:
                   id = new String(delivery.getBody());
                   cloudSessions.put(id, source);
-                  if (!source.equals(storeId) && localSessions.containsKey(id)) {
-                    log.debug("Removing session from local cache: " + id);
-                    localSessions.remove(id);
+                  if (operationMode.equals(Mode.ALLFORONE)) {
+                    // Delete this session locally if we're passing it around rather than keeping our own copy
+                    if (!source.equals(storeId) && localSessions.containsKey(id)) {
+                      log.debug("Removing session from local cache: " + id);
+                      localSessions.remove(id);
+                    }
                   }
                   if (log.isDebugEnabled()) {
                     log.debug(storeId + " Cloud sessions: " + cloudSessions.toString());
@@ -752,7 +776,13 @@ public class CloudStore extends StoreBase {
                   msg.setType(type);
                   msg.setId(headers.get("id").toString());
                   msg.setBody(delivery.getBody());
-                  updateEvents.add(msg);
+                  if (type.equals("replicate")) {
+                    if (!source.equals(storeId)) {
+                      updateEvents.add(msg);
+                    }
+                  } else {
+                    updateEvents.add(msg);
+                  }
                   break;
                 case CLEAR:
                   cloudSessions.clear();

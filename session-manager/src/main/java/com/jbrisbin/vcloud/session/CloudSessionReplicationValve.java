@@ -10,15 +10,12 @@ import javax.servlet.ServletException;
 import java.io.IOException;
 
 /**
- * Created by IntelliJ IDEA.
- * User: jbrisbin
- * Date: Apr 10, 2010
- * Time: 11:02:21 AM
- * To change this template use File | Settings | File Templates.
+ * Created by IntelliJ IDEA. User: jbrisbin Date: Apr 10, 2010 Time: 11:02:21 AM To change this template use File |
+ * Settings | File Templates.
  */
-public class CloudSessionValve extends ValveBase {
+public class CloudSessionReplicationValve extends ValveBase {
 
-  protected static final String info = "CloudSessionValve/1.0";
+  protected static final String info = "CloudSessionReplicationValve/1.0";
 
   @Override
   public String getInfo() {
@@ -26,19 +23,19 @@ public class CloudSessionValve extends ValveBase {
   }
 
   @Override
-  public void invoke( Request request, Response response ) throws IOException, ServletException {
+  public void invoke(Request request, Response response) throws IOException, ServletException {
 
-    getNext().invoke( request, response );
+    getNext().invoke(request, response);
 
     Session session = null;
     try {
       session = request.getSessionInternal();
-    } catch ( Throwable t ) {
+    } catch (Throwable t) {
       // IGNORED
     }
-    if ( null != session ) {
+    if (null != session) {
       Manager manager = request.getContext().getManager();
-      ((CloudManager) manager).getStore().save( session );
+      ((CloudManager) manager).getStore().replicateSession(session);
     }
   }
 }
