@@ -6,7 +6,7 @@
 
   <groupId>com.jbrisbin.vcloud</groupId>
   <artifactId>session-manager</artifactId>
-  <version>1.0</version>
+  <version>1.1.0</version>
   <name>vCloud Catalina Session Manager</name>
   <packaging>jar</packaging>
 
