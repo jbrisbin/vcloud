@@ -18,6 +18,7 @@
   <modules>
     <module>session-manager</module>
     <module>mbean-invoker</module>
+    <module>file-sync</module>
   </modules>
 
   <build>

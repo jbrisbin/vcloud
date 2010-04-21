@@ -52,7 +52,7 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    */
   protected static final String name = "CloudManager";
 
-  protected Logger log = LoggerFactory.getLogger(getClass());
+  protected Logger log = LoggerFactory.getLogger( getClass() );
   /**
    * <b>Store</b> object to manage user sessions.
    */
@@ -61,19 +61,19 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    * We don't actually worry about lifecycle events directly, we delegate this to an internal <b>LifecycleSupport</b>
    * object.
    */
-  protected LifecycleSupport lifecycle = new LifecycleSupport(this);
+  protected LifecycleSupport lifecycle = new LifecycleSupport( this );
   /**
    * I'm not actually using this yet, though I don't know that I should yank it out of the source quite yet.
    */
-  protected PropertyChangeSupport propertyChange = new PropertyChangeSupport(this);
+  protected PropertyChangeSupport propertyChange = new PropertyChangeSupport( this );
   /**
    * Is this <b>Manager</b> in a started state?
    */
-  protected AtomicBoolean started = new AtomicBoolean(false);
+  protected AtomicBoolean started = new AtomicBoolean( false );
   /**
    * Not sure what this is supposed to be used for.
    */
-  protected AtomicInteger rejectedSessions = new AtomicInteger(0);
+  protected AtomicInteger rejectedSessions = new AtomicInteger( 0 );
 
   @Override
   public String getInfo() {
@@ -100,46 +100,46 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    *
    * @param store
    */
-  public void setStore(Store store) {
-    if (store instanceof CloudStore) {
+  public void setStore( Store store ) {
+    if ( store instanceof CloudStore ) {
       this.store = (CloudStore) store;
-      store.setManager(this);
+      store.setManager( this );
     }
   }
 
   @Override
   public void processExpires() {
-    if (log.isDebugEnabled()) {
-      log.debug("processExpires()");
+    if ( log.isDebugEnabled() ) {
+      log.debug( "processExpires()" );
     }
   }
 
   @Override
-  public void add(Session session) {
-    if (log.isDebugEnabled()) {
-      log.debug(" ***** ADDING SESSION: " + session.toString());
+  public void add( Session session ) {
+    if ( log.isDebugEnabled() ) {
+      log.debug( " ***** ADDING SESSION: " + session.toString() );
     }
     try {
-      store.save(session);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      store.save( session );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
   }
 
   @Override
-  public Session createSession(String sessionId) {
+  public Session createSession( String sessionId ) {
     Session session = createEmptySession();
-    session.setNew(true);
-    session.setValid(true);
-    session.setCreationTime(System.currentTimeMillis());
-    session.setMaxInactiveInterval(this.maxInactiveInterval);
-    if (null == sessionId) {
-      session.setId(generateSessionId());
+    session.setNew( true );
+    session.setValid( true );
+    session.setCreationTime( System.currentTimeMillis() );
+    session.setMaxInactiveInterval( this.maxInactiveInterval );
+    if ( null == sessionId ) {
+      session.setId( generateSessionId() );
       sessionCounter++;
     } else {
-      session.setId(sessionId);
+      session.setId( sessionId );
     }
-    log.debug("Created a new session: " + session.getId());
+    log.debug( "Created a new session: " + session.getId() );
 
     return session;
   }
@@ -150,39 +150,40 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
   }
 
   @Override
-  public Session findSession(String id) throws IOException {
+  public Session findSession( String id ) throws IOException {
     Session session = null;
     // Try to find it somewhere in the cloud
-    try {
-      if (store.getCloudSessionMap().containsKey(id)) {
-        log.debug("Valid cloud session: " + id);
-        if (store.getLocalSessions().containsKey(id)) {
-          log.debug("Valid local session: " + id);
-          session = store.getLocalSessions().get(id);
-        } else {
-          log.debug("Trying to load session: " + id);
-          session = store.load(id);
-        }
-        // This part heavily-influenced by Tomcat's PersistentManagerBase
-        if (null != session) {
-          if (!session.isValid()) {
-            log.debug("Session invalid.");
-            session.expire();
-            remove(session);
-            return null;
-          }
-          session.setManager(this);
-          ((StandardSession) session).tellNew();
-          //add( session );
-          session.endAccess();
-        }
-      }
-    } catch (ClassNotFoundException e) {
-      log.error(e.getMessage(), e);
+    if ( log.isDebugEnabled() ) {
+      log.debug( " ************** findSession(" + id + "): Trying to load session from store..." );
+      log.debug( store.getStoreId() + " Cloud sessions: " + store.getCloudSessionMap().toString() );
+      log.debug( store.getStoreId() + " Local sessions: " + store.getLocalSessions().toString() );
     }
-    if (log.isDebugEnabled()) {
-      log.debug(store.getStoreId() + " Cloud sessions: " + store.getCloudSessionMap().toString());
-      log.debug(store.getStoreId() + " Local sessions: " + store.getLocalSessions().toString());
+    try {
+      session = store.load( id );
+    } catch ( ClassNotFoundException e ) {
+      log.error( e.getMessage(), e );
+    }
+
+    // This part heavily-influenced by Tomcat's PersistentManagerBase
+    if ( null != session ) {
+      if ( !session.isValid() ) {
+        if ( log.isDebugEnabled() ) {
+          log.debug( "Session " + id + " invalid." );
+        }
+        session.expire();
+        remove( session );
+        return null;
+      }
+      session.setManager( this );
+      ((StandardSession) session).tellNew();
+      //add( session );
+      session.endAccess();
+    }
+
+    if ( null == session ) {
+      if ( log.isDebugEnabled() ) {
+        log.debug( " ************** Session " + id + " not found!" );
+      }
     }
 
     return session;
@@ -192,61 +193,61 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
   public Session[] findSessions() {
     String[] ids = store.getCloudSessionIds();
     List<Session> sessions = new ArrayList<Session>();
-    for (String id : ids) {
+    for ( String id : ids ) {
       try {
-        Session sess = store.load(id);
-        if (null != sess) {
-          sessions.add(sess);
+        Session sess = store.load( id );
+        if ( null != sess ) {
+          sessions.add( sess );
         }
-      } catch (ClassNotFoundException e) {
-        log.error(e.getMessage(), e);
-      } catch (IOException e) {
-        log.error(e.getMessage(), e);
+      } catch ( ClassNotFoundException e ) {
+        log.error( e.getMessage(), e );
+      } catch ( IOException e ) {
+        log.error( e.getMessage(), e );
       }
     }
-    return sessions.toArray(new Session[sessions.size()]);
+    return sessions.toArray( new Session[sessions.size()] );
   }
 
   @Override
-  public void remove(Session session) {
+  public void remove( Session session ) {
     try {
-      store.remove(session.getId());
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      store.remove( session.getId() );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
   }
 
   @Override
   protected StandardSession getNewSession() {
-    return new CloudSession(this);
+    return new CloudSession( this );
   }
 
   @Override
   public String listSessionIds() {
     StringBuffer buff = new StringBuffer();
     boolean needsComma = false;
-    for (String id : store.getCloudSessionIds()) {
-      if (needsComma) {
-        buff.append(", ");
+    for ( String id : store.getCloudSessionIds() ) {
+      if ( needsComma ) {
+        buff.append( ", " );
       } else {
         needsComma = true;
       }
-      buff.append(id);
+      buff.append( id );
     }
     return buff.toString();
   }
 
   @Override
-  public String getSessionAttribute(String sessionId, String key) {
+  public String getSessionAttribute( String sessionId, String key ) {
     Session session = null;
     try {
-      session = findSession(sessionId);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      session = findSession( sessionId );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
-    if (null != session) {
-      Object o = session.getSession().getAttribute(key);
-      if (o instanceof String) {
+    if ( null != session ) {
+      Object o = session.getSession().getAttribute( key );
+      if ( o instanceof String ) {
         return (String) o;
       } else {
         return (null != o ? o.toString() : null);
@@ -257,20 +258,20 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
   }
 
   @Override
-  public HashMap getSession(String sessionId) {
+  public HashMap getSession( String sessionId ) {
     Session session = null;
     try {
-      session = findSession(sessionId);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      session = findSession( sessionId );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
-    if (null != session) {
+    if ( null != session ) {
       HttpSession httpSession = session.getSession();
       HashMap map = new HashMap();
       String key = null;
-      for (Enumeration keys = httpSession.getAttributeNames(); keys.hasMoreElements(); key = keys.nextElement()
-          .toString()) {
-        map.put(key, httpSession.getAttribute(key));
+      for ( Enumeration keys = httpSession.getAttributeNames(); keys.hasMoreElements(); key = keys.nextElement()
+          .toString() ) {
+        map.put( key, httpSession.getAttribute( key ) );
       }
       return map;
     }
@@ -278,65 +279,65 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
   }
 
   @Override
-  public void expireSession(String sessionId) {
+  public void expireSession( String sessionId ) {
     try {
-      store.remove(sessionId);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      store.remove( sessionId );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
   }
 
   @Override
-  public long getLastAccessedTimestamp(String sessionId) {
+  public long getLastAccessedTimestamp( String sessionId ) {
     Session session = null;
     try {
-      session = findSession(sessionId);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      session = findSession( sessionId );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
-    if (null != session) {
+    if ( null != session ) {
       return session.getLastAccessedTime();
     }
     return -1L;
   }
 
   @Override
-  public String getLastAccessedTime(String sessionId) {
+  public String getLastAccessedTime( String sessionId ) {
     Session session = null;
     try {
-      session = findSession(sessionId);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      session = findSession( sessionId );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
-    if (null != session) {
-      return String.valueOf(session.getLastAccessedTime());
+    if ( null != session ) {
+      return String.valueOf( session.getLastAccessedTime() );
     }
     return null;
   }
 
   @Override
-  public String getCreationTime(String sessionId) {
+  public String getCreationTime( String sessionId ) {
     Session session = null;
     try {
-      session = findSession(sessionId);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      session = findSession( sessionId );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
-    if (null != session) {
-      return String.valueOf(session.getCreationTime());
+    if ( null != session ) {
+      return String.valueOf( session.getCreationTime() );
     }
     return null;
   }
 
   @Override
-  public long getCreationTimestamp(String sessionId) {
+  public long getCreationTimestamp( String sessionId ) {
     Session session = null;
     try {
-      session = findSession(sessionId);
-    } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      session = findSession( sessionId );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
     }
-    if (null != session) {
+    if ( null != session ) {
       return session.getCreationTime();
     }
     return -1L;
@@ -347,8 +348,8 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    *
    * @param lifecycleListener
    */
-  public void addLifecycleListener(LifecycleListener lifecycleListener) {
-    lifecycle.addLifecycleListener(lifecycleListener);
+  public void addLifecycleListener( LifecycleListener lifecycleListener ) {
+    lifecycle.addLifecycleListener( lifecycleListener );
   }
 
   /**
@@ -365,8 +366,8 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    *
    * @param lifecycleListener
    */
-  public void removeLifecycleListener(LifecycleListener lifecycleListener) {
-    lifecycle.removeLifecycleListener(lifecycleListener);
+  public void removeLifecycleListener( LifecycleListener lifecycleListener ) {
+    lifecycle.removeLifecycleListener( lifecycleListener );
   }
 
   /**
@@ -374,8 +375,8 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    *
    * @param event
    */
-  public void lifecycleEvent(LifecycleEvent event) {
-    log.debug(event.toString());
+  public void lifecycleEvent( LifecycleEvent event ) {
+    log.debug( event.toString() );
   }
 
   /**
@@ -384,20 +385,20 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    * @throws LifecycleException
    */
   public void start() throws LifecycleException {
-    if (log.isDebugEnabled()) {
-      log.debug("manager.start()");
+    if ( log.isDebugEnabled() ) {
+      log.debug( "manager.start()" );
     }
-    if (started.get()) {
+    if ( started.get() ) {
       return;
     }
-    lifecycle.fireLifecycleEvent(START_EVENT, null);
+    lifecycle.fireLifecycleEvent( START_EVENT, null );
     try {
       init();
-    } catch (Throwable t) {
-      log.error(t.getMessage(), t);
+    } catch ( Throwable t ) {
+      log.error( t.getMessage(), t );
     }
     store.start();
-    started.set(true);
+    started.set( true );
   }
 
   /**
@@ -406,11 +407,11 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    * @throws LifecycleException
    */
   public void stop() throws LifecycleException {
-    if (log.isDebugEnabled()) {
-      log.debug("manager.stop()");
+    if ( log.isDebugEnabled() ) {
+      log.debug( "manager.stop()" );
     }
-    started.set(false);
-    lifecycle.fireLifecycleEvent(STOP_EVENT, null);
+    started.set( false );
+    lifecycle.fireLifecycleEvent( STOP_EVENT, null );
     store.stop();
   }
 
@@ -419,17 +420,17 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    *
    * @param propertyChangeEvent
    */
-  public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
-    if (!(propertyChangeEvent.getSource() instanceof Context)) {
+  public void propertyChange( PropertyChangeEvent propertyChangeEvent ) {
+    if ( !(propertyChangeEvent.getSource() instanceof Context) ) {
       // Ignore these
       return;
     }
 
-    if (propertyChangeEvent.getPropertyName().equals("sessionTimeout")) {
+    if ( propertyChangeEvent.getPropertyName().equals( "sessionTimeout" ) ) {
       try {
-        setMaxInactiveInterval(Integer.parseInt(propertyChangeEvent.getNewValue().toString()) * 60);
-      } catch (NumberFormatException nfe) {
-        log.error(nfe.getMessage(), nfe);
+        setMaxInactiveInterval( Integer.parseInt( propertyChangeEvent.getNewValue().toString() ) * 60 );
+      } catch ( NumberFormatException nfe ) {
+        log.error( nfe.getMessage(), nfe );
       }
     }
   }
@@ -448,8 +449,8 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    *
    * @param i
    */
-  public void setRejectedSessions(int i) {
-    rejectedSessions.set(i);
+  public void setRejectedSessions( int i ) {
+    rejectedSessions.set( i );
   }
 
   /**
@@ -459,8 +460,8 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    * @throws IOException
    */
   public void load() throws ClassNotFoundException, IOException {
-    if (log.isDebugEnabled()) {
-      log.debug("load()");
+    if ( log.isDebugEnabled() ) {
+      log.debug( "load()" );
     }
   }
 
@@ -470,8 +471,8 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
    * @throws IOException
    */
   public void unload() throws IOException {
-    if (log.isDebugEnabled()) {
-      log.debug("unload()");
+    if ( log.isDebugEnabled() ) {
+      log.debug( "unload()" );
     }
   }
 }
