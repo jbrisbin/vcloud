@@ -32,4 +32,6 @@ public interface SessionSerializer {
   public void setSession(Session session);
 
   public byte[] serialize() throws IOException;
+
+  public String getMD5Sum();
 }

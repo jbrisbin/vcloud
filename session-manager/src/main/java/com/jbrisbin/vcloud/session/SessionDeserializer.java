@@ -33,7 +33,7 @@ public interface SessionDeserializer {
 
   public Session getSession();
 
-  public void setSession(Session session);
-
   public Session deserialize() throws IOException;
+
+  public String getMD5Sum();
 }

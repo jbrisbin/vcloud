@@ -22,6 +22,9 @@ import org.apache.catalina.session.StandardSession;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.math.BigInteger;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 /**
  * Convert's our <b>StandardSession</b> subclass into a byte array for inclusion in an MQ message.
@@ -33,6 +36,8 @@ public class InternalSessionSerializer implements SessionSerializer {
    * The session to serialize.
    */
   protected Session session;
+  protected byte[] bytes = null;
+  protected String md5sum;
 
   public Session getSession() {
     return this.session;
@@ -53,17 +58,30 @@ public class InternalSessionSerializer implements SessionSerializer {
    * @throws IOException
    */
   public byte[] serialize() throws IOException {
+    if (null == bytes) {
+      ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
+      ObjectOutputStream objectOut = new ObjectOutputStream(bytesOut);
 
-    ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-    ObjectOutputStream objectOut = new ObjectOutputStream(bytesOut);
+      ((StandardSession) session).writeObjectData(objectOut);
 
-    ((StandardSession) session).writeObjectData(objectOut);
+      objectOut.flush();
+      objectOut.close();
+      bytesOut.flush();
+      bytesOut.close();
 
-    objectOut.flush();
-    objectOut.close();
-    bytesOut.flush();
-    bytesOut.close();
+      bytes = bytesOut.toByteArray();
+      try {
+        MessageDigest digest = MessageDigest.getInstance("MD5");
+        digest.update(bytes);
+        md5sum = new BigInteger(1, digest.digest()).toString(16);
+      } catch (NoSuchAlgorithmException e) {
+        e.printStackTrace();
+      }
+    }
+    return bytes;
+  }
 
-    return bytesOut.toByteArray();
+  public String getMD5Sum() {
+    return md5sum;
   }
 }

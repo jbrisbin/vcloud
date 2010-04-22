@@ -19,8 +19,6 @@ package com.jbrisbin.vcloud.session;
 import org.apache.catalina.Manager;
 import org.apache.catalina.session.StandardSession;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 /**
  * A custom implementation of the Tomcat <b>StandardSession</b> which adds some convenience features like a dirty flag
  * and an enum for the differen event types.
@@ -36,24 +34,13 @@ public class CloudSession extends StandardSession {
   }
 
   /**
-   * Whether anything has changed in this session, which might be useful for replication code.
-   */
-  private AtomicBoolean dirty = new AtomicBoolean(false);
-  /**
    * Is this session a copy of another one somewhere in the cloud?
    */
   private boolean replica = false;
+  private String md5sum;
 
   public CloudSession(Manager manager) {
     super(manager);
-  }
-
-  public void setDirty(boolean dirty) {
-    this.dirty.set(dirty);
-  }
-
-  public boolean isDirty() {
-    return this.dirty.get();
   }
 
   public boolean isReplica() {

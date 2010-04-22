@@ -26,6 +26,7 @@ public class CloudSessionMessage {
   private String source;
   private String id;
   private byte[] body;
+  private boolean forwarded = false;
 
   public String getType() {
     return type;
@@ -59,4 +60,11 @@ public class CloudSessionMessage {
     this.body = body;
   }
 
+  public boolean isForwarded() {
+    return forwarded;
+  }
+
+  public void setForwarded(boolean forwarded) {
+    this.forwarded = forwarded;
+  }
 }
