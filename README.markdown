@@ -23,5 +23,4 @@ NOTE: I've switched my servers to using SLF4J/Log4J. I blogged about this switch
 
 http://jbrisbin.wordpress.com/2010/04/20/change-logging-package-to-slf4jlog4j-in-tcservertomcat/
 
-I'm going to, but haven't yet, create a branch that uses the default Tomcat JULI logging.
-Just haven't had time...
+I've created a branch of this that uses the default Tomcat JULI logging.
