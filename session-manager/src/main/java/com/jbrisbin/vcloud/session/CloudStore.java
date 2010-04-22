@@ -133,7 +133,7 @@ public class CloudStore extends StoreBase {
   /**
    * What mode to operate in. One of "allforone" or "replicated".
    */
-  protected Mode operationMode = Mode.ONEFORALL;
+  protected Mode operationMode = Mode.REPLICATED;
   /**
    * Should I clean up after myself and delete all my queues when this store shuts down?
    */
