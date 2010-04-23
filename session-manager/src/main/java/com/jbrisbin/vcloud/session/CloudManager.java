@@ -22,6 +22,7 @@ import org.apache.catalina.session.StandardSession;
 import org.apache.catalina.util.LifecycleSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 import javax.servlet.http.HttpSession;
 import java.beans.PropertyChangeEvent;
@@ -109,16 +110,11 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
 
   @Override
   public void processExpires() {
-    if (log.isDebugEnabled()) {
-      //log.debug("processExpires()");
-    }
+    store.processExpires();
   }
 
   @Override
   public void add(Session session) {
-    if (log.isDebugEnabled()) {
-      //log.debug(" ***** ADDING SESSION: " + session.toString());
-    }
     try {
       store.save(session);
     } catch (IOException e) {
@@ -151,11 +147,13 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
 
   @Override
   public Session findSession(String id) throws IOException {
+    MDC.put("method", "findSession()");
+
     Session session = null;
     if (store.isValidSession(id)) {
       // Try to find it somewhere in the cloud
       if (log.isDebugEnabled()) {
-        log.debug("findSession(): Trying to load session " + id + " from store...");
+        log.debug("Trying to load session " + id + " from store...");
       }
       try {
         session = store.load(id);
@@ -188,6 +186,8 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
       }
     }
 
+    MDC.remove("method");
+
     return session;
   }
 
@@ -197,7 +197,12 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
 
   @Override
   public Session[] findSessions() {
-    String[] ids = store.getCloudSessionIds();
+    String[] ids = new String[0];
+    try {
+      ids = store.keys();
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+    }
     List<Session> sessions = new ArrayList<Session>();
     for (String id : ids) {
       try {
@@ -232,13 +237,17 @@ public class CloudManager extends ManagerBase implements Lifecycle, LifecycleLis
   public String listSessionIds() {
     StringBuffer buff = new StringBuffer();
     boolean needsComma = false;
-    for (String id : store.getCloudSessionIds()) {
-      if (needsComma) {
-        buff.append(", ");
-      } else {
-        needsComma = true;
+    try {
+      for (String id : store.keys()) {
+        if (needsComma) {
+          buff.append(", ");
+        } else {
+          needsComma = true;
+        }
+        buff.append(id);
       }
-      buff.append(id);
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
     }
     return buff.toString();
   }
