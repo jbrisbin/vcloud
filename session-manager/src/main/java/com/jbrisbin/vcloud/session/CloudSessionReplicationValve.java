@@ -23,19 +23,19 @@ public class CloudSessionReplicationValve extends ValveBase {
   }
 
   @Override
-  public void invoke(Request request, Response response) throws IOException, ServletException {
+  public void invoke( Request request, Response response ) throws IOException, ServletException {
 
-    getNext().invoke(request, response);
+    getNext().invoke( request, response );
 
     Session session = null;
     try {
       session = request.getSessionInternal();
-    } catch (Throwable t) {
+    } catch ( Throwable t ) {
       // IGNORED
     }
-    if (null != session) {
+    if ( null != session ) {
       Manager manager = request.getContext().getManager();
-      ((CloudManager) manager).getStore().replicateSession(session);
+      ((CloudManager) manager).getStore().replicateSession( session );
     }
   }
 }
