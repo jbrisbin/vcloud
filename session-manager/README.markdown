@@ -22,20 +22,22 @@ configure the Manager and Store:
 <pre><code>&lt;Context&gt;
 
   &lt;Manager className="com.jbrisbin.vcloud.session.CloudManager"&gt;
-    &lt;Store className="com.jbrisbin.vcloud.session.CloudStore"
-           storeId="${instance.id}"
-           operationMode="replicated"
-           mqHost="${mq.host}"
-           mqPort="${mq.port}"
-           mqUser="${mq.user}"
-           mqPassword="${mq.password}"
-           mqVirtualHost="${mq.virtualhost}"
-           eventsExchange="vcloud.events.session"
-           eventsQueue="vcloud.events.${instance.id}"
-           sourceEventsQueue="vcloud.source.${instance.id}"
-           replicationEventsExchange="vcloud.events.replication"
-           replicationEventsQueue="vcloud.replication.${instance.id}"
-           deleteQueuesOnStop="true"/&gt;
+		&lt;Store className="com.jbrisbin.vcloud.session.CloudStore"
+					 storeId="${instance.id}"
+					 operationMode="oneforall"
+					 loadTimeout="5"
+					 mqHost="localhost"
+					 mqPort="5672"
+					 mqUser="guest"
+					 mqPassword="guest"
+					 mqVirtualHost="/"
+					 eventsExchange="vcloud.dev.events"
+					 eventsQueue="vcloud.dev.events.${instance.id}"
+					 sourceEventsQueue="vcloud.dev.source.${instance.id}"
+					 sessionEventsExchange="vcloud.dev.sessions"
+					 sessionEventsQueuePattern="vcloud.dev.sessions.%s"
+					 replicationEventsExchange="vcloud.dev.replication"
+					 replicationEventsQueue="vcloud.replication.${instance.id}"/&gt;
   &lt;/Manager&gt;
   &lt;Valve className="com.jbrisbin.vcloud.session.CloudSessionReplicationValve"/&gt;
 
@@ -49,19 +51,14 @@ example would be "vm_172_23_10_13.tc1".
 
 #### Operation Modes
 
-The session manager is now configurable between two modes of operation: "oneforall"
-and "replicated". "replicated" is the default mode of operation and, for performance reasons,
-replicates the session to everyone; no matter what server your user lands on, their session
-will be there. The store keeps track of MD5 hashes and will only replicate a session if it
-sees changes in the serialized object. However, this could be quite often if the session is
-accessed in the webpp, thus updating the "lastAccessed" time. I'm looking for a good Java-based
-binary diff utility I can use to cut down on the size of the messages. That should increase
-throughput and performance a fair bit.
+Right now, "oneforall" mode is the only really functional mode of operation. It's not as
+performant, of course, as having local objects pulled from a Map. I'm working on that.
 
-"oneforall" mode is still a bit rough around the edges. I'm working on making it more robust,
-but at the moment, I've noticed a fair number of annoying issues using more than two servers behind
-an Apache proxy. I don't know yet what makes it unstable in this configuration, but I've got
-a couple fixes in mind that I'll implement as soon as I can.
+#### Binding Pattern
+
+In order to load sessions, the store that has the object in its internal Map has to bind
+its "sourceEventsQueue" using the pattern defined in sessionEventsQueuePattern. The "%s"
+will be replaced by the actual session ID.
 
 #### Note:
 

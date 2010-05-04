@@ -60,16 +60,20 @@ public class CloudSession extends StandardSession {
 
   @Override
   public void setAttribute( String name, Object value ) {
+    boolean needsReplicated = needsReplicated( name, value );
     super.setAttribute( name, value );
-    System.out.println( "set(" + name + "): " + value );
-    replicateAttribute( name );
+    if ( needsReplicated ) {
+      replicateAttribute( name );
+    }
   }
 
   @Override
   public void setAttribute( String name, Object value, boolean notify ) {
+    boolean needsReplicated = needsReplicated( name, value );
     super.setAttribute( name, value, notify );
-    System.out.println( "set(" + name + "): " + value );
-    replicateAttribute( name );
+    if ( needsReplicated ) {
+      replicateAttribute( name );
+    }
   }
 
   void setAttributeInternal( String name, Object value ) {
@@ -79,7 +83,6 @@ public class CloudSession extends StandardSession {
   @Override
   public void setPrincipal( Principal principal ) {
     super.setPrincipal( principal );
-    System.out.println( "setPrincipal(): " + principal );
     replicate();
   }
 
@@ -90,14 +93,12 @@ public class CloudSession extends StandardSession {
   @Override
   public void removeAttribute( String name ) {
     super.removeAttribute( name );
-    System.out.println( "remove(" + name + ")" );
     replicateRemoveAttribute( name );
   }
 
   @Override
   public void removeAttribute( String name, boolean notify ) {
     super.removeAttribute( name, notify );
-    System.out.println( "remove(" + name + ", " + notify + ")" );
     replicateRemoveAttribute( name );
   }
 
@@ -111,7 +112,7 @@ public class CloudSession extends StandardSession {
   }
 
   /**
-   * Atomically set an attribute and return a boolean indicating whether or not this attribute needs replicated.
+   * Return a boolean indicating whether or not this attribute needs replicated.
    *
    * @param name
    * @param obj
@@ -157,7 +158,7 @@ public class CloudSession extends StandardSession {
   protected CloudStore getStore() {
     Manager mgr = getManager();
     if ( mgr instanceof CloudManager ) {
-      return ((CloudManager) getManager()).getStore();
+      return ((CloudManager) mgr).getStore();
     }
     return null;
   }
