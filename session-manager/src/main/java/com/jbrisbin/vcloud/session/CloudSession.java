@@ -19,40 +19,146 @@ package com.jbrisbin.vcloud.session;
 import org.apache.catalina.Manager;
 import org.apache.catalina.session.StandardSession;
 
+import java.io.IOException;
+import java.security.Principal;
+
 /**
  * A custom implementation of the Tomcat <b>StandardSession</b> which adds some convenience features like a dirty flag
  * and an enum for the differen event types.
  *
  * @author J. Brisbin <jon@jbrisbin.com>
  */
+@SuppressWarnings({"unchecked"})
 public class CloudSession extends StandardSession {
   /**
    * Events related to sessions can be of several different types.
    */
   public static enum Events {
-    TOUCH, DESTROY, UPDATE, LOAD, CLEAR, REPLICATE, GETIDS, GETALL
+    TOUCH, DESTROY, UPDATE, LOAD, CLEAR, REPLICATE, SETATTR, DELATTR, GETALL
+  }
+
+  public static Events asEvent( String s ) {
+    return Events.valueOf( s.toUpperCase() );
   }
 
   /**
    * Is this session a copy of another one somewhere in the cloud?
    */
   private boolean replica = false;
-  private String md5sum;
 
-  public CloudSession(Manager manager) {
-    super(manager);
+  public CloudSession( Manager manager ) {
+    super( manager );
   }
 
   public boolean isReplica() {
     return replica;
   }
 
-  public synchronized void setReplica(boolean replica) {
+  public synchronized void setReplica( boolean replica ) {
     this.replica = replica;
+  }
+
+  @Override
+  public void setAttribute( String name, Object value ) {
+    super.setAttribute( name, value );
+    System.out.println( "set(" + name + "): " + value );
+    replicateAttribute( name );
+  }
+
+  @Override
+  public void setAttribute( String name, Object value, boolean notify ) {
+    super.setAttribute( name, value, notify );
+    System.out.println( "set(" + name + "): " + value );
+    replicateAttribute( name );
+  }
+
+  void setAttributeInternal( String name, Object value ) {
+    attributes.put( name, value );
+  }
+
+  @Override
+  public void setPrincipal( Principal principal ) {
+    super.setPrincipal( principal );
+    System.out.println( "setPrincipal(): " + principal );
+    replicate();
+  }
+
+  void setPrincipalInternal( Principal principal ) {
+    super.setPrincipal( principal );
+  }
+
+  @Override
+  public void removeAttribute( String name ) {
+    super.removeAttribute( name );
+    System.out.println( "remove(" + name + ")" );
+    replicateRemoveAttribute( name );
+  }
+
+  @Override
+  public void removeAttribute( String name, boolean notify ) {
+    super.removeAttribute( name, notify );
+    System.out.println( "remove(" + name + ", " + notify + ")" );
+    replicateRemoveAttribute( name );
+  }
+
+  void removeAttributeInternal( String name ) {
+    attributes.remove( name );
   }
 
   @Override
   public String toString() {
     return "CloudSession[" + getIdInternal() + "]";
+  }
+
+  /**
+   * Atomically set an attribute and return a boolean indicating whether or not this attribute needs replicated.
+   *
+   * @param name
+   * @param obj
+   * @return
+   */
+  protected boolean needsReplicated( String name, Object obj ) {
+    if ( attributes.containsKey( name ) ) {
+      Object orig = attributes.get( name );
+      if ( null != obj && obj.equals( orig ) ) {
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      return true;
+    }
+  }
+
+  protected void replicate() {
+    try {
+      getStore().replicateSession( this );
+    } catch ( IOException e ) {
+      e.printStackTrace();
+    }
+  }
+
+  protected void replicateRemoveAttribute( String attr ) {
+    try {
+      getStore().removeAttribute( this, attr );
+    } catch ( IOException e ) {
+      e.printStackTrace();
+    }
+  }
+
+  protected void replicateAttribute( String attr ) {
+    try {
+      getStore().replicateAttribute( this, attr );
+    } catch ( IOException e ) {
+      e.printStackTrace();
+    }
+  }
+
+  protected CloudStore getStore() {
+    Manager mgr = getManager();
+    if ( mgr instanceof CloudManager ) {
+      return ((CloudManager) getManager()).getStore();
+    }
+    return null;
   }
 }
