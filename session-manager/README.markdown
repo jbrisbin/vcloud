@@ -39,7 +39,6 @@ configure the Manager and Store:
 					 replicationEventsExchange="vcloud.dev.replication"
 					 replicationEventsQueue="vcloud.replication.${instance.id}"/&gt;
   &lt;/Manager&gt;
-  &lt;Valve className="com.jbrisbin.vcloud.session.CloudSessionReplicationValve"/&gt;
 
 &lt;/Context&gt;
 </code></pre>
