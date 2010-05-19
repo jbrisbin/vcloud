@@ -45,7 +45,7 @@ import java.util.concurrent.*;
 @SuppressWarnings({"unchecked"})
 public class CloudInvokerListener implements ContainerListener, LifecycleListener {
 
-  protected Log log = LogFactory.getLog( getClass() );
+  protected Log log = LogFactory.getLog(getClass());
   protected boolean DEBUG = log.isDebugEnabled();
   /**
    * Comma-delimited list of JMX domains to expose via messaging.
@@ -73,7 +73,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
    * a different virtual host.
    */
   protected String mqVirtualHost = "/";
-  protected String instanceName = System.getenv( "HOSTNAME" );
+  protected String instanceName = System.getenv("HOSTNAME");
   protected String eventsExchange = "amq.fanout";
   protected String eventsQueue = "events";
   protected String mbeanEventsExchange = "amq.topic";
@@ -90,7 +90,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return exposeDomains;
   }
 
-  public void setExposeDomains( String exposeDomains ) {
+  public void setExposeDomains(String exposeDomains) {
     this.exposeDomains = exposeDomains;
   }
 
@@ -98,7 +98,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return mqHost;
   }
 
-  public void setMqHost( String mqHost ) {
+  public void setMqHost(String mqHost) {
     this.mqHost = mqHost;
   }
 
@@ -106,7 +106,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return mqPort;
   }
 
-  public void setMqPort( int mqPort ) {
+  public void setMqPort(int mqPort) {
     this.mqPort = mqPort;
   }
 
@@ -114,7 +114,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return mqUser;
   }
 
-  public void setMqUser( String mqUser ) {
+  public void setMqUser(String mqUser) {
     this.mqUser = mqUser;
   }
 
@@ -122,7 +122,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return mqPassword;
   }
 
-  public void setMqPassword( String mqPassword ) {
+  public void setMqPassword(String mqPassword) {
     this.mqPassword = mqPassword;
   }
 
@@ -130,7 +130,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return mqVirtualHost;
   }
 
-  public void setMqVirtualHost( String mqVirtualHost ) {
+  public void setMqVirtualHost(String mqVirtualHost) {
     this.mqVirtualHost = mqVirtualHost;
   }
 
@@ -138,7 +138,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return instanceName;
   }
 
-  public void setInstanceName( String instanceName ) {
+  public void setInstanceName(String instanceName) {
     this.instanceName = instanceName;
   }
 
@@ -146,7 +146,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return eventsExchange;
   }
 
-  public void setEventsExchange( String eventsExchange ) {
+  public void setEventsExchange(String eventsExchange) {
     this.eventsExchange = eventsExchange;
   }
 
@@ -154,7 +154,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return eventsQueue;
   }
 
-  public void setEventsQueue( String eventsQueue ) {
+  public void setEventsQueue(String eventsQueue) {
     this.eventsQueue = eventsQueue;
   }
 
@@ -162,7 +162,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return mbeanEventsExchange;
   }
 
-  public void setMbeanEventsExchange( String mbeanEventsExchange ) {
+  public void setMbeanEventsExchange(String mbeanEventsExchange) {
     this.mbeanEventsExchange = mbeanEventsExchange;
   }
 
@@ -170,7 +170,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return mbeanEventsQueue;
   }
 
-  public void setMbeanEventsQueue( String mbeanEventsQueue ) {
+  public void setMbeanEventsQueue(String mbeanEventsQueue) {
     this.mbeanEventsQueue = mbeanEventsQueue;
   }
 
@@ -178,85 +178,85 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     return mbeanEventsRoutingKey;
   }
 
-  public void setMbeanEventsRoutingKey( String mbeanEventsRoutingKey ) {
+  public void setMbeanEventsRoutingKey(String mbeanEventsRoutingKey) {
     this.mbeanEventsRoutingKey = mbeanEventsRoutingKey;
   }
 
-  public void containerEvent( ContainerEvent event ) {
-    log.info( "Type: " + event.getType().toString() );
+  public void containerEvent(ContainerEvent event) {
+    log.info("Type: " + event.getType().toString());
     try {
-      log.info( "Data: " + event.getData().toString() );
-    } catch ( Throwable t ) {
+      log.info("Data: " + event.getData().toString());
+    } catch (Throwable t) {
     }
   }
 
-  public void lifecycleEvent( LifecycleEvent event ) {
-    if ( null == mbeanServer ) {
+  public void lifecycleEvent(LifecycleEvent event) {
+    if (null == mbeanServer) {
       mbeanServer = MBeanUtils.createServer();
     }
-    if ( null == connection ) {
+    if (null == connection) {
       try {
         ConnectionParameters params = new ConnectionParameters();
-        params.setUsername( mqUser );
-        params.setPassword( mqPassword );
-        params.setVirtualHost( mqVirtualHost );
-        if ( DEBUG ) {
-          log.debug( "Connecting to RabbitMQ server..." );
+        params.setUsername(mqUser);
+        params.setPassword(mqPassword);
+        params.setVirtualHost(mqVirtualHost);
+        if (DEBUG) {
+          log.debug("Connecting to RabbitMQ server...");
         }
-        connection = new ConnectionFactory( params ).newConnection( mqHost, mqPort );
+        connection = new ConnectionFactory(params).newConnection(mqHost, mqPort);
         channel = connection.createChannel();
 
         // For generic cloud events (membership, etc...)
-        if ( DEBUG ) {
-          log.debug( "Declaring exch: " + eventsExchange + ", q: " + eventsQueue );
+        if (DEBUG) {
+          log.debug("Declaring exch: " + eventsExchange + ", q: " + eventsQueue);
         }
-        //channel.exchangeDelete( eventsExchange );
-        channel.exchangeDeclare( eventsExchange, "topic", true );
-        //channel.queueDeclare( eventsQueue, false, true, false, true, null );
-        //channel.queueBind( eventsQueue, eventsExchange, "#" );
-
-        // For mbean events
-        if ( DEBUG ) {
-          log.debug(
-              "Declaring/binding exch: " + mbeanEventsExchange + ", q: " + mbeanEventsQueue + ", key: " + mbeanEventsRoutingKey );
+        synchronized (channel) {
+          //channel.exchangeDelete( eventsExchange );
+          channel.exchangeDeclare(eventsExchange, "fanout", true);
+          channel.queueDeclare(eventsQueue, false, true, false, true, null);
+          channel.queueBind(eventsQueue, eventsExchange, "");
+          // For mbean events
+          if (DEBUG) {
+            log.debug(
+                "Declaring/binding exch: " + mbeanEventsExchange + ", q: " + mbeanEventsQueue + ", key: " + mbeanEventsRoutingKey);
+          }
+          //channel.exchangeDelete( mbeanEventsExchange );
+          channel.exchangeDeclare(mbeanEventsExchange, "topic", true);
+          channel.queueDeclare(mbeanEventsQueue, true);
+          channel.queueBind(mbeanEventsQueue, mbeanEventsExchange, mbeanEventsRoutingKey);
         }
-        //channel.exchangeDelete( mbeanEventsExchange );
-        channel.exchangeDeclare( mbeanEventsExchange, "direct", true );
-        channel.queueDeclare( mbeanEventsQueue, true );
-        channel.queueBind( mbeanEventsQueue, mbeanEventsExchange, mbeanEventsRoutingKey );
-
-      } catch ( IOException e ) {
-        log.error( e.getMessage(), e );
+      } catch (IOException e) {
+        log.error(e.getMessage(), e);
       }
     }
 
     // Let cloud know about this Lifecycle event
     AMQP.BasicProperties props = new AMQP.BasicProperties();
     try {
-      if ( DEBUG ) {
-        log.debug( "Attempting to notify cloud of " + event.getType() + " event..." );
+      if (DEBUG) {
+        log.debug("Attempting to notify cloud of " + event.getType() + " event...");
       }
-      channel.basicPublish( eventsExchange, event.getType() + "." + instanceName, props, event.getType().getBytes() );
-    } catch ( IOException e ) {
-      log.error( e.getMessage(), e );
+      channel.basicPublish(eventsExchange, event.getType() + "." + instanceName, props, event.getType().getBytes());
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
     }
 
-    if ( Lifecycle.AFTER_START_EVENT.equals( event.getType() ) ) {
-      workerPool.submit( new EventsHandler( mbeanEventsQueue ) );
-    } else if ( Lifecycle.AFTER_STOP_EVENT.equals( event.getType() ) ) {
+    if (Lifecycle.AFTER_START_EVENT.equals(event.getType())) {
+      workerPool.submit(new EventsHandler(mbeanEventsQueue));
+    } else if (Lifecycle.AFTER_STOP_EVENT.equals(event.getType())) {
       try {
-        if ( DEBUG ) {
-          log.debug( "Closing RabbitMQ channel..." );
+        if (DEBUG) {
+          log.debug("Closing RabbitMQ channel...");
         }
         channel.close();
-      } catch ( IOException e ) {
+      } catch (IOException e) {
       }
       try {
-        if ( DEBUG ) {
-          log.debug( "Closing RabbitMQ connection..." );
+        if (DEBUG) {
+          log.debug("Closing RabbitMQ connection...");
         }
         connection.close();
-      } catch ( IOException e ) {
+      } catch (IOException e) {
       }
     }
 
@@ -268,17 +268,17 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     protected Channel channel;
     protected boolean active = true;
 
-    public EventsHandler( String queue ) {
+    public EventsHandler(String queue) {
       this.queue = queue;
       try {
         this.channel = connection.createChannel();
-        consumer = new QueueingConsumer( channel, incoming );
-        if ( DEBUG ) {
-          log.debug( "Consuming events on q: " + queue );
+        consumer = new QueueingConsumer(channel, incoming);
+        if (DEBUG) {
+          log.debug("Consuming events on q: " + queue);
         }
-        channel.basicConsume( queue, true, consumer );
-      } catch ( IOException e ) {
-        log.error( e.getMessage(), e );
+        channel.basicConsume(queue, true, consumer);
+      } catch (IOException e) {
+        log.error(e.getMessage(), e);
       }
     }
 
@@ -286,57 +286,57 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       return active;
     }
 
-    public synchronized void setActive( boolean active ) {
+    public synchronized void setActive(boolean active) {
       this.active = active;
     }
 
     public EventsHandler call() throws Exception {
-      while ( active ) {
-        if ( DEBUG ) {
-          log.debug( "Waiting for delivery..." );
+      while (active) {
+        if (DEBUG) {
+          log.debug("Waiting for delivery...");
         }
         QueueingConsumer.Delivery delivery = incoming.take();
-        if ( DEBUG ) {
-          log.debug( "Processing delivery: " + delivery.toString() );
+        if (DEBUG) {
+          log.debug("Processing delivery: " + delivery.toString());
         }
 
         CloudMBeanInvoker invoker = new StandardMBeanInvoker();
-        invoker.setReplyTo( delivery.getProperties().getReplyTo() );
-        invoker.setCorrelationId( delivery.getProperties().getCorrelationId() );
+        invoker.setReplyTo(delivery.getProperties().getReplyTo());
+        invoker.setCorrelationId(delivery.getProperties().getCorrelationId());
         ObjectMapper omapper = new ObjectMapper();
-        Map<String, Object> request = omapper.readValue( new ByteArrayInputStream( delivery.getBody() ), Map.class );
-        if ( DEBUG ) {
-          log.debug( "Request: " + request.toString() );
+        Map<String, Object> request = omapper.readValue(new ByteArrayInputStream(delivery.getBody()), Map.class);
+        if (DEBUG) {
+          log.debug("Request: " + request.toString());
         }
-        if ( request.containsKey( "mbean" ) ) {
-          invoker.setName( request.get( "mbean" ).toString() );
+        if (request.containsKey("mbean")) {
+          invoker.setName(request.get("mbean").toString());
         }
-        if ( request.containsKey( "attribute" ) ) {
-          invoker.setAttributeName( request.get( "attribute" ).toString() );
+        if (request.containsKey("attribute")) {
+          invoker.setAttributeName(request.get("attribute").toString());
         }
-        if ( request.containsKey( "operation" ) ) {
-          invoker.setOperation( request.get( "operation" ).toString() );
-          if ( request.containsKey( "parameters" ) ) {
-            Object o = request.get( "parameters" );
-            if ( DEBUG ) {
-              log.debug( "params: " + String.valueOf( o ) );
+        if (request.containsKey("operation")) {
+          invoker.setOperation(request.get("operation").toString());
+          if (request.containsKey("parameters")) {
+            Object o = request.get("parameters");
+            if (DEBUG) {
+              log.debug("params: " + String.valueOf(o));
             }
-            if ( null != o && o instanceof List ) {
+            if (null != o && o instanceof List) {
               List<List<Object>> params = (List<List<Object>>) o;
               String[] argTypes = new String[params.size()];
               Object[] args = new Object[params.size()];
-              for ( int i = 0; i < params.size(); i++ ) {
-                List<Object> param = params.get( i );
-                argTypes[i] = param.get( 0 ).toString();
-                args[i] = param.get( 1 );
+              for (int i = 0; i < params.size(); i++) {
+                List<Object> param = params.get(i);
+                argTypes[i] = param.get(0).toString();
+                args[i] = param.get(1);
               }
-              invoker.setArgs( args );
-              invoker.setArgTypes( argTypes );
+              invoker.setArgs(args);
+              invoker.setArgTypes(argTypes);
             }
           }
         }
 
-        workerPool.submit( invoker );
+        workerPool.submit(invoker);
       }
       return this;
     }
@@ -357,14 +357,14 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     public StandardMBeanInvoker() {
       try {
         this.channel = connection.createChannel();
-      } catch ( IOException e ) {
-        log.error( e.getMessage(), e );
+      } catch (IOException e) {
+        log.error(e.getMessage(), e);
       }
     }
 
-    public void setName( String name ) throws MalformedObjectNameException {
+    public void setName(String name) throws MalformedObjectNameException {
       this.name = name;
-      this.oname = new ObjectName( name );
+      this.oname = new ObjectName(name);
     }
 
     public String getName() {
@@ -375,7 +375,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       return oname;
     }
 
-    public void setOperation( String name ) {
+    public void setOperation(String name) {
       this.operation = name;
     }
 
@@ -383,7 +383,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       return this.operation;
     }
 
-    public void setAttributeName( String name ) {
+    public void setAttributeName(String name) {
       this.attributeName = name;
     }
 
@@ -391,7 +391,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       return this.attributeName;
     }
 
-    public void setCorrelationId( String id ) {
+    public void setCorrelationId(String id) {
       this.correlationId = id;
     }
 
@@ -399,7 +399,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       return this.correlationId;
     }
 
-    public void setReplyTo( String replyTo ) {
+    public void setReplyTo(String replyTo) {
       this.replyTo = replyTo;
     }
 
@@ -407,7 +407,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       return this.replyTo;
     }
 
-    public void setArgs( Object[] args ) {
+    public void setArgs(Object[] args) {
       this.args = args;
     }
 
@@ -415,7 +415,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       return this.args;
     }
 
-    public void setArgTypes( String[] argTypes ) {
+    public void setArgTypes(String[] argTypes) {
       this.argTypes = argTypes;
     }
 
@@ -423,12 +423,12 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       return this.argTypes;
     }
 
-    public Object getAttributeValue( String attributeName ) {
+    public Object getAttributeValue(String attributeName) {
       Object o = null;
       try {
-        o = mbeanServer.getAttribute( oname, attributeName );
-      } catch ( Throwable t ) {
-        log.error( t.getMessage(), t );
+        o = mbeanServer.getAttribute(oname, attributeName);
+      } catch (Throwable t) {
+        log.error(t.getMessage(), t);
       }
       return o;
     }
@@ -436,60 +436,60 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     public Object invoke() {
       Object o = null;
       try {
-        o = mbeanServer.invoke( oname, operation, args, argTypes );
-      } catch ( Throwable t ) {
-        log.error( t.getMessage(), t );
+        o = mbeanServer.invoke(oname, operation, args, argTypes);
+      } catch (Throwable t) {
+        log.error(t.getMessage(), t);
       }
       return o;
     }
 
     public Object call() throws Exception {
       AMQP.BasicProperties props = new AMQP.BasicProperties();
-      props.setCorrelationId( correlationId );
+      props.setCorrelationId(correlationId);
       Object o = null;
-      if ( null != operation ) {
+      if (null != operation) {
         o = invoke();
-      } else if ( null != attributeName ) {
-        o = mbeanServer.getAttribute( oname, attributeName );
+      } else if (null != attributeName) {
+        o = mbeanServer.getAttribute(oname, attributeName);
       }
-      if ( null != o ) {
-        if ( DEBUG ) {
-          log.debug( "Invocation returned: " + o.toString() );
-          log.debug( "Class: " + o.getClass().toString() );
+      if (null != o) {
+        if (DEBUG) {
+          log.debug("Invocation returned: " + o.toString());
+          log.debug("Class: " + o.getClass().toString());
         }
       }
       ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-      JsonGenerator json = new JsonFactory().createJsonGenerator( bytesOut, JsonEncoding.UTF8 );
+      JsonGenerator json = new JsonFactory().createJsonGenerator(bytesOut, JsonEncoding.UTF8);
       json.writeStartObject();
       // We're getting runtime JVM information
-      if ( o instanceof CompositeDataSupport ) {
+      if (o instanceof CompositeDataSupport) {
         CompositeDataSupport data = (CompositeDataSupport) o;
-        for ( String key : data.getCompositeType().keySet() ) {
-          if ( DEBUG ) {
-            log.debug( key + ": " + data.get( key ) );
+        for (String key : data.getCompositeType().keySet()) {
+          if (DEBUG) {
+            log.debug(key + ": " + data.get(key));
           }
-          Object item = data.get( key );
-          if ( item instanceof Long ) {
-            json.writeNumberField( key, (Long) item );
-          } else if ( item instanceof String ) {
-            json.writeStringField( key, (String) item );
+          Object item = data.get(key);
+          if (item instanceof Long) {
+            json.writeNumberField(key, (Long) item);
+          } else if (item instanceof String) {
+            json.writeStringField(key, (String) item);
           } else {
-            json.writeStringField( key, item.toString() );
+            json.writeStringField(key, item.toString());
           }
         }
-      } else if ( o instanceof Long ) {
-        json.writeNumberField( attributeName, (Long) o );
-      } else if ( o instanceof String ) {
-        json.writeStringField( attributeName, (String) o );
+      } else if (o instanceof Long) {
+        json.writeNumberField(attributeName, (Long) o);
+      } else if (o instanceof String) {
+        json.writeStringField(attributeName, (String) o);
       } else {
-        if ( DEBUG ) {
-          log.debug( "Not sure what to do with " + attributeName );
+        if (DEBUG) {
+          log.debug("Not sure what to do with " + attributeName);
         }
       }
       json.writeEndObject();
       json.flush();
 
-      channel.basicPublish( "", getReplyTo(), props, bytesOut.toByteArray() );
+      channel.basicPublish("", getReplyTo(), props, bytesOut.toByteArray());
 
       return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
