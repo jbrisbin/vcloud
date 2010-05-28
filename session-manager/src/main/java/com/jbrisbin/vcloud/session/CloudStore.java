@@ -876,21 +876,25 @@ public class CloudStore extends StoreBase {
               }
               break;
             case SETATTR:
-              id = headers.get("id").toString();
-              attr = headers.get("attribute").toString();
-              session = localSessions.get(id);
-              if (null != session) {
-                AttributeDeserializer deser = getAttributeDeserializer(delivery.getBody());
-                Object obj = deser.deserialize();
-                session.setAttributeInternal(attr, obj);
+              if (!source.equals(sourceEventsQueue)) {
+                id = headers.get("id").toString();
+                attr = headers.get("attribute").toString();
+                session = localSessions.get(id);
+                if (null != session) {
+                  AttributeDeserializer deser = getAttributeDeserializer(delivery.getBody());
+                  Object obj = deser.deserialize();
+                  session.setAttributeInternal(attr, obj);
+                }
               }
               break;
             case DELATTR:
-              id = headers.get("id").toString();
-              attr = new String(delivery.getBody());
-              session = localSessions.get(id);
-              if (null != session) {
-                session.removeAttributeInternal(attr);
+              if (!source.equals(sourceEventsQueue)) {
+                id = headers.get("id").toString();
+                attr = new String(delivery.getBody());
+                session = localSessions.get(id);
+                if (null != session) {
+                  session.removeAttributeInternal(attr);
+                }
               }
               break;
           }
@@ -938,6 +942,7 @@ public class CloudStore extends StoreBase {
           }
           try {
             deserializer.deserialize();
+            session.access();
             String id = session.getId();
             SessionLoader sessLoader;
             if (null != (sessLoader = sessionLoaders.remove(id))) {
@@ -956,6 +961,7 @@ public class CloudStore extends StoreBase {
                 localSessions.put(id, session);
               }
             }
+            session.endAccess();
           } catch (IOException e) {
             log.error(e.getMessage(), e);
           }

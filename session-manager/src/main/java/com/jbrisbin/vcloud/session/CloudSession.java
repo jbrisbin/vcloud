@@ -37,8 +37,8 @@ public class CloudSession extends StandardSession {
     TOUCH, DESTROY, UPDATE, LOAD, CLEAR, REPLICATE, SETATTR, DELATTR, GETALL
   }
 
-  public static Events asEvent( String s ) {
-    return Events.valueOf( s.toUpperCase() );
+  public static Events asEvent(String s) {
+    return Events.valueOf(s.toUpperCase());
   }
 
   /**
@@ -46,64 +46,64 @@ public class CloudSession extends StandardSession {
    */
   private boolean replica = false;
 
-  public CloudSession( Manager manager ) {
-    super( manager );
+  public CloudSession(Manager manager) {
+    super(manager);
   }
 
   public boolean isReplica() {
     return replica;
   }
 
-  public synchronized void setReplica( boolean replica ) {
+  public synchronized void setReplica(boolean replica) {
     this.replica = replica;
   }
 
   @Override
-  public void setAttribute( String name, Object value ) {
-    boolean needsReplicated = needsReplicated( name, value );
-    super.setAttribute( name, value );
-    if ( needsReplicated ) {
-      replicateAttribute( name );
+  public void setAttribute(String name, Object value) {
+    boolean needsReplicated = needsReplicated(name, value);
+    super.setAttribute(name, value);
+    if (needsReplicated) {
+      replicateAttribute(name);
     }
   }
 
   @Override
-  public void setAttribute( String name, Object value, boolean notify ) {
-    boolean needsReplicated = needsReplicated( name, value );
-    super.setAttribute( name, value, notify );
-    if ( needsReplicated ) {
-      replicateAttribute( name );
+  public void setAttribute(String name, Object value, boolean notify) {
+    boolean needsReplicated = needsReplicated(name, value);
+    super.setAttribute(name, value, notify);
+    if (needsReplicated) {
+      replicateAttribute(name);
     }
   }
 
-  void setAttributeInternal( String name, Object value ) {
-    attributes.put( name, value );
+  void setAttributeInternal(String name, Object value) {
+    attributes.put(name, value);
   }
 
   @Override
-  public void setPrincipal( Principal principal ) {
-    super.setPrincipal( principal );
+  public void setPrincipal(Principal principal) {
+    super.setPrincipal(principal);
     replicate();
   }
 
-  void setPrincipalInternal( Principal principal ) {
-    super.setPrincipal( principal );
+  void setPrincipalInternal(Principal principal) {
+    super.setPrincipal(principal);
   }
 
   @Override
-  public void removeAttribute( String name ) {
-    super.removeAttribute( name );
-    replicateRemoveAttribute( name );
+  public void removeAttribute(String name) {
+    super.removeAttribute(name);
+    replicateRemoveAttribute(name);
   }
 
   @Override
-  public void removeAttribute( String name, boolean notify ) {
-    super.removeAttribute( name, notify );
-    replicateRemoveAttribute( name );
+  public void removeAttribute(String name, boolean notify) {
+    super.removeAttribute(name, notify);
+    replicateRemoveAttribute(name);
   }
 
-  void removeAttributeInternal( String name ) {
-    attributes.remove( name );
+  void removeAttributeInternal(String name) {
+    attributes.remove(name);
   }
 
   @Override
@@ -118,10 +118,10 @@ public class CloudSession extends StandardSession {
    * @param obj
    * @return
    */
-  protected boolean needsReplicated( String name, Object obj ) {
-    if ( attributes.containsKey( name ) ) {
-      Object orig = attributes.get( name );
-      if ( null != obj && obj.equals( orig ) ) {
+  protected boolean needsReplicated(String name, Object obj) {
+    if (attributes.containsKey(name)) {
+      Object orig = attributes.get(name);
+      if (null != obj && obj.equals(orig)) {
         return true;
       } else {
         return false;
@@ -133,31 +133,31 @@ public class CloudSession extends StandardSession {
 
   protected void replicate() {
     try {
-      getStore().replicateSession( this );
-    } catch ( IOException e ) {
+      getStore().replicateSession(this);
+    } catch (IOException e) {
       e.printStackTrace();
     }
   }
 
-  protected void replicateRemoveAttribute( String attr ) {
+  protected void replicateRemoveAttribute(String attr) {
     try {
-      getStore().removeAttribute( this, attr );
-    } catch ( IOException e ) {
+      getStore().removeAttribute(this, attr);
+    } catch (IOException e) {
       e.printStackTrace();
     }
   }
 
-  protected void replicateAttribute( String attr ) {
+  protected void replicateAttribute(String attr) {
     try {
-      getStore().replicateAttribute( this, attr );
-    } catch ( IOException e ) {
+      getStore().replicateAttribute(this, attr);
+    } catch (IOException e) {
       e.printStackTrace();
     }
   }
 
   protected CloudStore getStore() {
     Manager mgr = getManager();
-    if ( mgr instanceof CloudManager ) {
+    if (mgr instanceof CloudManager) {
       return ((CloudManager) mgr).getStore();
     }
     return null;
