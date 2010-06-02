@@ -194,40 +194,11 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
     if (null == mbeanServer) {
       mbeanServer = MBeanUtils.createServer();
     }
-    if (null == connection) {
-      try {
-        ConnectionParameters params = new ConnectionParameters();
-        params.setUsername(mqUser);
-        params.setPassword(mqPassword);
-        params.setVirtualHost(mqVirtualHost);
-        if (DEBUG) {
-          log.debug("Connecting to RabbitMQ server...");
-        }
-        connection = new ConnectionFactory(params).newConnection(mqHost, mqPort);
-        channel = connection.createChannel();
-
-        // For generic cloud events (membership, etc...)
-        if (DEBUG) {
-          log.debug("Declaring exch: " + eventsExchange + ", q: " + eventsQueue);
-        }
-        synchronized (channel) {
-          //channel.exchangeDelete( eventsExchange );
-          channel.exchangeDeclare(eventsExchange, "fanout", true);
-          channel.queueDeclare(eventsQueue, false, true, false, true, null);
-          channel.queueBind(eventsQueue, eventsExchange, "");
-          // For mbean events
-          if (DEBUG) {
-            log.debug(
-                "Declaring/binding exch: " + mbeanEventsExchange + ", q: " + mbeanEventsQueue + ", key: " + mbeanEventsRoutingKey);
-          }
-          //channel.exchangeDelete( mbeanEventsExchange );
-          channel.exchangeDeclare(mbeanEventsExchange, "topic", true);
-          channel.queueDeclare(mbeanEventsQueue, true);
-          channel.queueBind(mbeanEventsQueue, mbeanEventsExchange, mbeanEventsRoutingKey);
-        }
-      } catch (IOException e) {
-        log.error(e.getMessage(), e);
-      }
+    try {
+      channel = getChannel();
+    } catch (IOException e) {
+      log.error(e.getMessage(), e);
+      return;
     }
 
     // Let cloud know about this Lifecycle event
@@ -248,7 +219,9 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
         if (DEBUG) {
           log.debug("Closing RabbitMQ channel...");
         }
-        channel.close();
+        synchronized (channel) {
+          channel.close();
+        }
       } catch (IOException e) {
       }
       try {
@@ -493,6 +466,42 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
 
       return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
+  }
+
+  protected Channel getChannel() throws IOException {
+    if (null == connection || !connection.isOpen()) {
+      ConnectionParameters params = new ConnectionParameters();
+      params.setUsername(mqUser);
+      params.setPassword(mqPassword);
+      params.setVirtualHost(mqVirtualHost);
+      if (DEBUG) {
+        log.debug("Connecting to RabbitMQ server...");
+      }
+      connection = new ConnectionFactory(params).newConnection(mqHost, mqPort);
+    }
+    if (null == channel || !channel.isOpen()) {
+      channel = connection.createChannel();
+      // For generic cloud events (membership, etc...)
+      if (DEBUG) {
+        log.debug("Declaring exch: " + eventsExchange + ", q: " + eventsQueue);
+      }
+      synchronized (channel) {
+        //channel.exchangeDelete( eventsExchange );
+        channel.exchangeDeclare(eventsExchange, "topic", true);
+        channel.queueDeclare(eventsQueue, false, true, false, true, null);
+        channel.queueBind(eventsQueue, eventsExchange, "");
+        // For mbean events
+        if (DEBUG) {
+          log.debug(
+              "Declaring/binding exch: " + mbeanEventsExchange + ", q: " + mbeanEventsQueue + ", key: " + mbeanEventsRoutingKey);
+        }
+        //channel.exchangeDelete( mbeanEventsExchange );
+        channel.exchangeDeclare(mbeanEventsExchange, "topic", true);
+        channel.queueDeclare(mbeanEventsQueue, true);
+        channel.queueBind(mbeanEventsQueue, mbeanEventsExchange, mbeanEventsRoutingKey);
+      }
+    }
+    return channel;
   }
 
 }

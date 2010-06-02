@@ -628,12 +628,7 @@ public class CloudStore extends StoreBase {
     }
 
     try {
-      ConnectionParameters cparams = new ConnectionParameters();
-      cparams.setUsername(mqUser);
-      cparams.setPassword(mqPassword);
-      cparams.setVirtualHost(mqVirtualHost);
-      mqConnection = new ConnectionFactory(cparams).newConnection(mqHost, mqPort);
-      mqChannel = mqConnection.createChannel();
+      mqChannel = getMqChannel();
 
       // Messages bound for all nodes in cluster go here
       mqChannel.exchangeDeclare(eventsExchange, "fanout", true);
@@ -641,14 +636,14 @@ public class CloudStore extends StoreBase {
       mqChannel.queueBind(eventsQueue, eventsExchange, "");
 
       // Messages bound for just this node go here
-      mqChannel.queueDeclare(sourceEventsQueue, true);
+      mqChannel.queueDeclare(sourceEventsQueue, false);
 
       // Session events
       mqChannel.exchangeDeclare(sessionEventsExchange, "topic", true);
 
       // Replication events
       mqChannel.exchangeDeclare(replicationEventsExchange, "topic", true);
-      mqChannel.queueDeclare(replicationEventsQueue, true);
+      mqChannel.queueDeclare(replicationEventsQueue, false);
       mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, replicationEventsRoutingKey);
 
       for (int i = 0; i < maxMqHandlers; i++) {
@@ -687,6 +682,7 @@ public class CloudStore extends StoreBase {
 
       synchronized (this) {
         if (deleteQueuesOnStop) {
+          getMqChannel();
           mqChannel.queueDelete(eventsQueue);
           mqChannel.queueDelete(sourceEventsQueue);
           mqChannel.queueDelete(replicationEventsQueue);
@@ -738,7 +734,18 @@ public class CloudStore extends StoreBase {
     }
   }
 
+  protected Connection getMqConnection() throws IOException {
+    ConnectionParameters cparams = new ConnectionParameters();
+    cparams.setUsername(mqUser);
+    cparams.setPassword(mqPassword);
+    cparams.setVirtualHost(mqVirtualHost);
+    return new ConnectionFactory(cparams).newConnection(mqHost, mqPort);
+  }
+
   protected Channel getMqChannel() throws IOException {
+    if (null == mqConnection || !mqConnection.isOpen()) {
+      mqConnection = getMqConnection();
+    }
     if (null == mqChannel || !mqChannel.isOpen()) {
       mqChannel = mqConnection.createChannel();
     }

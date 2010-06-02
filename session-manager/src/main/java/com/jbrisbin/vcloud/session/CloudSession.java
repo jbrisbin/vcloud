@@ -18,6 +18,7 @@ package com.jbrisbin.vcloud.session;
 
 import org.apache.catalina.Manager;
 import org.apache.catalina.session.StandardSession;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.Principal;
@@ -30,6 +31,8 @@ import java.security.Principal;
  */
 @SuppressWarnings({"unchecked"})
 public class CloudSession extends StandardSession {
+
+
   /**
    * Events related to sessions can be of several different types.
    */
@@ -104,6 +107,34 @@ public class CloudSession extends StandardSession {
 
   void removeAttributeInternal(String name) {
     attributes.remove(name);
+  }
+
+  @Override
+  public boolean isValid() {
+    if (this.expiring) {
+      return true;
+    }
+    if (!this.isValid) {
+      LoggerFactory.getLogger(getClass()).debug(getIdInternal() + " isValid is false");
+      return false;
+    }
+    if (ACTIVITY_CHECK && accessCount.get() > 0) {
+      return true;
+    }
+    if (maxInactiveInterval >= 0) {
+      long timeNow = System.currentTimeMillis();
+      int timeIdle = (int) ((timeNow - thisAccessedTime) / 1000L);
+      if (timeIdle >= maxInactiveInterval) {
+        LoggerFactory.getLogger(getClass())
+            .debug(String.format("%s timeIdle (%s) >= maxInactiveInterval (%s)",
+                getIdInternal(),
+                timeIdle,
+                maxInactiveInterval));
+        expire(true);
+      }
+    }
+
+    return (this.isValid);
   }
 
   @Override
