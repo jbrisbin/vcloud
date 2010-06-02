@@ -35,7 +35,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Provide a consumer and listener/handlers for invoking JMX operations via RabbitMQ messages.
@@ -81,7 +83,6 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
   protected String mbeanEventsRoutingKey = "#";
   protected Connection connection;
   protected Channel channel;
-  protected BlockingQueue<QueueingConsumer.Delivery> incoming = new LinkedBlockingQueue<QueueingConsumer.Delivery>();
   protected ExecutorService workerPool = Executors.newCachedThreadPool();
 
   protected MBeanServer mbeanServer;
@@ -195,7 +196,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       mbeanServer = MBeanUtils.createServer();
     }
     try {
-      channel = getChannel();
+      getChannel();
     } catch (IOException e) {
       log.error(e.getMessage(), e);
       return;
@@ -245,7 +246,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       this.queue = queue;
       try {
         this.channel = connection.createChannel();
-        consumer = new QueueingConsumer(channel, incoming);
+        consumer = new QueueingConsumer(channel);
         if (DEBUG) {
           log.debug("Consuming events on q: " + queue);
         }
@@ -268,7 +269,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
         if (DEBUG) {
           log.debug("Waiting for delivery...");
         }
-        QueueingConsumer.Delivery delivery = incoming.take();
+        QueueingConsumer.Delivery delivery = consumer.nextDelivery();
         if (DEBUG) {
           log.debug("Processing delivery: " + delivery.toString());
         }
@@ -277,7 +278,8 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
         invoker.setReplyTo(delivery.getProperties().getReplyTo());
         invoker.setCorrelationId(delivery.getProperties().getCorrelationId());
         ObjectMapper omapper = new ObjectMapper();
-        Map<String, Object> request = omapper.readValue(new ByteArrayInputStream(delivery.getBody()), Map.class);
+        Map<String, Object> request = omapper.readValue(new ByteArrayInputStream(delivery.getBody().clone()),
+            Map.class);
         if (DEBUG) {
           log.debug("Request: " + request.toString());
         }
@@ -454,6 +456,18 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
         json.writeNumberField(attributeName, (Long) o);
       } else if (o instanceof String) {
         json.writeStringField(attributeName, (String) o);
+      } else if (o.getClass().isArray()) {
+        if (DEBUG) {
+          log.debug("Writing array to JSON...");
+        }
+        json.writeArrayFieldStart(operation);
+        for (String s : (String[]) o) {
+          if (DEBUG) {
+            log.debug("Object: " + s);
+          }
+          json.writeObject(s);
+        }
+        json.writeEndArray();
       } else {
         if (DEBUG) {
           log.debug("Not sure what to do with " + attributeName);
@@ -462,7 +476,9 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       json.writeEndObject();
       json.flush();
 
-      channel.basicPublish("", getReplyTo(), props, bytesOut.toByteArray());
+      synchronized (this.channel) {
+        this.channel.basicPublish("", getReplyTo(), props, bytesOut.toByteArray());
+      }
 
       return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
