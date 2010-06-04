@@ -77,7 +77,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
   protected String mqVirtualHost = "/";
   protected String instanceName = System.getenv("HOSTNAME");
   protected String eventsExchange = "amq.fanout";
-  protected String eventsQueue = "events";
+  //protected String eventsQueue = "events";
   protected String mbeanEventsExchange = "amq.topic";
   protected String mbeanEventsQueue = "events.mbean";
   protected String mbeanEventsRoutingKey = "#";
@@ -150,7 +150,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
   public void setEventsExchange(String eventsExchange) {
     this.eventsExchange = eventsExchange;
   }
-
+/*
   public String getEventsQueue() {
     return eventsQueue;
   }
@@ -158,6 +158,7 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
   public void setEventsQueue(String eventsQueue) {
     this.eventsQueue = eventsQueue;
   }
+*/
 
   public String getMbeanEventsExchange() {
     return mbeanEventsExchange;
@@ -499,13 +500,13 @@ public class CloudInvokerListener implements ContainerListener, LifecycleListene
       channel = connection.createChannel();
       // For generic cloud events (membership, etc...)
       if (DEBUG) {
-        log.debug("Declaring exch: " + eventsExchange + ", q: " + eventsQueue);
+        log.debug("Declaring exch: " + eventsExchange);
       }
       synchronized (channel) {
         //channel.exchangeDelete( eventsExchange );
         channel.exchangeDeclare(eventsExchange, "topic", true);
-        channel.queueDeclare(eventsQueue, false, true, false, true, null);
-        channel.queueBind(eventsQueue, eventsExchange, "");
+        //channel.queueDeclare(eventsQueue, false, true, false, true, null);
+        //channel.queueBind(eventsQueue, eventsExchange, "");
         // For mbean events
         if (DEBUG) {
           log.debug(
