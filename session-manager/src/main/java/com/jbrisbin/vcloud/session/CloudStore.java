@@ -443,6 +443,11 @@ public class CloudStore extends StoreBase {
           if (DEBUG) {
             log.debug("Session " + id + " has expired.");
           }
+          Channel channel = getMqChannel();
+          synchronized (channel) {
+            channel.queueUnbind(sourceEventsQueue, sessionEventsExchange, String.format(sessionEventsQueuePattern, id));
+          }
+          sendEvent("destroy", id.getBytes());
         }
       }
     } catch (IOException e) {
