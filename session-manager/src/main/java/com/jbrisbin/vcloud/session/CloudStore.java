@@ -575,9 +575,14 @@ public class CloudStore extends StoreBase {
     serializer.setSession(session);
     byte[] bytes = serializer.serialize();
 
-    mqChannel.basicPublish(replicationEventsExchange, replicationEventsRoutingKey, props, bytes);
-    mqChannel.basicPublish(sessionEventsExchange, String.format(sessionEventsQueuePattern, session.getId()), props,
-        bytes);
+    Channel channel = getMqChannel();
+    synchronized (channel) {
+      channel.basicPublish(replicationEventsExchange, replicationEventsRoutingKey, props, bytes);
+      channel.basicPublish(sessionEventsExchange,
+          String.format(sessionEventsQueuePattern, session.getId()),
+          props,
+          bytes);
+    }
   }
 
   public void replicateAttribute(CloudSession session, String attr) throws IOException {
@@ -803,7 +808,7 @@ public class CloudStore extends StoreBase {
 
     public EventListener(String queue) {
       try {
-        channel = mqConnection.createChannel();
+        channel = getMqConnection().createChannel();
         eventsConsumer = new QueueingConsumer(channel);
         channel.basicConsume(queue, true, eventsConsumer);
       } catch (IOException e) {
@@ -923,7 +928,7 @@ public class CloudStore extends StoreBase {
     protected Channel channel;
 
     public UpdateEventHandler() throws IOException {
-      this.channel = mqConnection.createChannel();
+      this.channel = getMqConnection().createChannel();
     }
 
     public void run() {
@@ -990,7 +995,7 @@ public class CloudStore extends StoreBase {
 
     public LoadEventHandler() {
       try {
-        channel = mqConnection.createChannel();
+        channel = getMqConnection().createChannel();
       } catch (IOException e) {
         log.error(e.getMessage(), e);
       }
@@ -1104,7 +1109,7 @@ public class CloudStore extends StoreBase {
 
     public DestroyEventHandler(String id) throws IOException {
       this.id = id;
-      this.channel = mqConnection.createChannel();
+      this.channel = getMqConnection().createChannel();
     }
 
     public void run() {
@@ -1137,7 +1142,7 @@ public class CloudStore extends StoreBase {
 
     public SessionLoader(String id) throws IOException {
       this.id = id;
-      this.channel = mqConnection.createChannel();
+      this.channel = getMqConnection().createChannel();
     }
 
     /**
