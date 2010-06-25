@@ -29,7 +29,7 @@ Here's an example configuration:
   &lt;/category&gt;
 </code></pre>
 
-The import stuff is the "AppenderId", which you need to set so your log aggregator can
+The important stuff is the "AppenderId", which you need to set so your log aggregator can
 distinguish logging events from one server versus another; the RabbitMQ server info
 (host, username, password, virtual host, port isn't listed); and the topic exchange to
 which your logging events will be published.
