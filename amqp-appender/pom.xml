@@ -11,7 +11,7 @@
 
   <groupId>com.jbrisbin.vcloud</groupId>
   <artifactId>amqp-appender</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
 
   <properties>
     <rabbitmq.version>1.7.2</rabbitmq.version>
