@@ -7,8 +7,7 @@ troubleshooting a problem and you can't reasonably watch 12 individual log files
 This is why I wrote this appender. It's pretty simple. There's not many moving parts.
 Here's an example configuration:
 
-<pre><code>
-  &lt;appender name="cloud" class="com.jbrisbin.vcloud.logging.RabbitMQAppender"&gt;
+<pre><code>  &lt;appender name="cloud" class="com.jbrisbin.vcloud.logging.RabbitMQAppender"&gt;
     &lt;param name="AppenderId" value="${instance.id}"/&gt;
     &lt;param name="Host" value="mq.cloud.mycompany.com"/&gt;
     &lt;param name="User" value="guest"/&gt;
@@ -44,4 +43,21 @@ com.jbrisbin.vcloud would, in the configuration above, go to a queue named:
 <pre><code>DEBUG.com.jbrisbin.vcloud.session.CloudStore</code></pre>
 
 I'm planning on making this configurable. You'd then pass a pattern the appender would
-format into the routing key. When I get time...
+format into the routing key. When I get time.
+
+The "correlationId" property is a concatenation of `appenderId` and `System.currentTimeMillis()`.
+
+### Aggregating Events ###
+
+Here's some simple Groovy code using my RabbitMQ DSL to watch this exchange and aggregate
+logging events:
+
+<pre><code>mq.exchange(name: "vcloud.logging.events", durable: true, autoDelete: false) {
+  queue name: "vcloud.logging.test", routingKey: "#", {
+    consume onmessage: { msg ->
+      print "${msg.properties.correlationId} ${msg.envelope.routingKey} ${msg.bodyAsString}"
+      return true
+    }
+  }
+}
+</code></pre>
