@@ -182,15 +182,14 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
     public LoggingEvent call() throws Exception {
       String id = String.format("%s:%s", appenderId, System.currentTimeMillis());
+      String routingKey = String.format("%s.%s", event.getLevel().toString(), event.getLoggerName());
+
       AMQP.BasicProperties props = new AMQP.BasicProperties();
       props.setCorrelationId(id);
       props.setType(event.getLevel().toString());
       props.setTimestamp(Calendar.getInstance().getTime());
 
-      String routingKey = String.format("%s.%s", event.getLevel().toString(), event.getLoggerName());
-      Channel mq = getConnection().createChannel();
-      mq.basicPublish(exchange, routingKey, props, message.toString().getBytes());
-      mq.close();
+      getChannel().basicPublish(exchange, routingKey, props, message.toString().getBytes());
 
       return event;
     }
