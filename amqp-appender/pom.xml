@@ -78,4 +78,8 @@
 
   </dependencies>
 
+  <build>
+    <finalName>vcloud-${artifactId}-${version}</finalName>
+  </build>
+
 </project>
