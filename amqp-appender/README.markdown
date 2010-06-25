@@ -14,6 +14,7 @@ Here's an example configuration:
     &lt;param name="Password" value="guest"/&gt;
     &lt;param name="VirtualHost" value="/"/&gt;
     &lt;param name="Exchange" value="vcloud.logging.events"/&gt;
+    &lt;param name="QueueNameFormatString" value="%1s.%2s"/&gt;
     &lt;layout class="org.apache.log4j.PatternLayout"&gt;
       &lt;param name="ConversionPattern" value="%d %-5p %c{1} %m%n"/&gt;
     &lt;/layout&gt;
@@ -42,10 +43,12 @@ com.jbrisbin.vcloud would, in the configuration above, go to a queue named:
 
   DEBUG.com.jbrisbin.vcloud.session.CloudStore
 
-I'm planning on making this configurable. You'd then pass a pattern the appender would
-format into the routing key. When I get time.
+This is configurable, so if you'd rather have the level on the end, you can invert the
+`queueNameFormatString` to "%2$s.%1$s". Check the Javadoc for java.util.Formatter for all
+the options when creating formatting strings.
 
-The "correlationId" property is a concatenation of `appenderId` and `System.currentTimeMillis()`.
+The `correlationId` property is a concatenation of `appenderId` and `System.currentTimeMillis()`.
+This isn't configurable.
 
 ### Aggregating Events ###
 

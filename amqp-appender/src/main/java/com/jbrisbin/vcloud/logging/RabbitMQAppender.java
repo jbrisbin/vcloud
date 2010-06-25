@@ -31,8 +31,8 @@ public class RabbitMQAppender extends AppenderSkeleton {
   private int publishPoolMaxSize = 10;
   private String exchange = "vcloud.logging.events";
   private String appenderId = System.getProperty("HOSTNAME");
+  private String queueNameFormatString = "%s.%s";
   private ExecutorService workerPool = Executors.newCachedThreadPool();
-
 
   public String getHost() {
     return host;
@@ -96,7 +96,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
     try {
       mq = getChannel();
       synchronized (mq) {
-        mq.exchangeDeclare(exchange, "topic");
+        mq.exchangeDeclare(exchange, "topic", true, true, false, null);
       }
     } catch (IOException e) {
       log.error(e.getMessage(), e);
@@ -109,6 +109,14 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
   public void setAppenderId(String appenderId) {
     this.appenderId = appenderId;
+  }
+
+  public String getQueueNameFormatString() {
+    return queueNameFormatString;
+  }
+
+  public void setQueueNameFormatString(String queueNameFormatString) {
+    this.queueNameFormatString = queueNameFormatString;
   }
 
   @Override
@@ -182,7 +190,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
     public LoggingEvent call() throws Exception {
       String id = String.format("%s:%s", appenderId, System.currentTimeMillis());
-      String routingKey = String.format("%s.%s", event.getLevel().toString(), event.getLoggerName());
+      String routingKey = String.format(queueNameFormatString, event.getLevel().toString(), event.getLoggerName());
 
       AMQP.BasicProperties props = new AMQP.BasicProperties();
       props.setCorrelationId(id);
