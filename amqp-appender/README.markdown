@@ -40,7 +40,7 @@ Logging events get published to the configured exchange using a routing key that
 combination of Level and Category. For example, at DEBUG level, logging for category
 com.jbrisbin.vcloud would, in the configuration above, go to a queue named:
 
-<pre><code>DEBUG.com.jbrisbin.vcloud.session.CloudStore</code></pre>
+  DEBUG.com.jbrisbin.vcloud.session.CloudStore
 
 I'm planning on making this configurable. You'd then pass a pattern the appender would
 format into the routing key. When I get time.
