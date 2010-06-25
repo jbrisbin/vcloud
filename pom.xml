@@ -19,6 +19,7 @@
     <module>session-manager</module>
     <module>mbean-invoker</module>
     <module>file-sync</module>
+    <module>amqp-appender</module>
   </modules>
 
   <build>

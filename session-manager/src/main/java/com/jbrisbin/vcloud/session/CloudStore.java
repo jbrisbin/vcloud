@@ -460,6 +460,11 @@ public class CloudStore extends StoreBase {
    * @throws IOException
    */
   public Session load(String id) throws ClassNotFoundException, IOException {
+    if (DEBUG) {
+      log.debug("Cloud sessions: " + sessions.toString());
+      log.debug("Local sessions: " + localSessions.toString());
+    }
+
     // Check locally first
     CloudSession session = localSessions.get(id);
     if (null != session) {
@@ -513,6 +518,7 @@ public class CloudStore extends StoreBase {
    * @throws IOException
    */
   public void remove(String id) throws IOException {
+    sessions.remove(id);
     localSessions.remove(id);
     sendEvent("destroy", id.getBytes());
   }
@@ -636,21 +642,23 @@ public class CloudStore extends StoreBase {
     try {
       mqChannel = getMqChannel();
 
-      // Messages bound for all nodes in cluster go here
-      mqChannel.exchangeDeclare(eventsExchange, "fanout", true);
-      mqChannel.queueDeclare(eventsQueue, true);
-      mqChannel.queueBind(eventsQueue, eventsExchange, "");
+      synchronized (mqChannel) {
+        // Messages bound for all nodes in cluster go here
+        mqChannel.exchangeDeclare(eventsExchange, "fanout", true);
+        mqChannel.queueDeclare(eventsQueue, true);
+        mqChannel.queueBind(eventsQueue, eventsExchange, "");
 
-      // Messages bound for just this node go here
-      mqChannel.queueDeclare(sourceEventsQueue, false);
+        // Messages bound for just this node go here
+        mqChannel.queueDeclare(sourceEventsQueue, false);
 
-      // Session events
-      mqChannel.exchangeDeclare(sessionEventsExchange, "topic", true);
+        // Session events
+        mqChannel.exchangeDeclare(sessionEventsExchange, "topic", true);
 
-      // Replication events
-      mqChannel.exchangeDeclare(replicationEventsExchange, "topic", true);
-      mqChannel.queueDeclare(replicationEventsQueue, false);
-      mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, replicationEventsRoutingKey);
+        // Replication events
+        mqChannel.exchangeDeclare(replicationEventsExchange, "topic", true);
+        mqChannel.queueDeclare(replicationEventsQueue, false);
+        mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, replicationEventsRoutingKey);
+      }
 
       for (int i = 0; i < maxMqHandlers; i++) {
         workers.add(workerPool.submit(new EventListener(eventsQueue)));
@@ -750,9 +758,15 @@ public class CloudStore extends StoreBase {
 
   protected Channel getMqChannel() throws IOException {
     if (null == mqConnection || !mqConnection.isOpen()) {
+      if (DEBUG) {
+        log.debug("Creating a new RabbitMQ connection...");
+      }
       mqConnection = getMqConnection();
     }
     if (null == mqChannel || !mqChannel.isOpen()) {
+      if (DEBUG) {
+        log.debug("Creating a new RabbitMQ channel...");
+      }
       mqChannel = mqConnection.createChannel();
     }
     return mqChannel;
@@ -896,7 +910,7 @@ public class CloudStore extends StoreBase {
                 if (null != session) {
                   AttributeDeserializer deser = getAttributeDeserializer(delivery.getBody());
                   Object obj = deser.deserialize();
-                  session.setAttributeInternal(attr, obj);
+                  session.maybeSetAttributeInternal(attr, obj);
                 }
               }
               break;
@@ -906,7 +920,7 @@ public class CloudStore extends StoreBase {
                 attr = new String(delivery.getBody());
                 session = localSessions.get(id);
                 if (null != session) {
-                  session.removeAttributeInternal(attr);
+                  session.maybeRemoveAttributeInternal(attr);
                 }
               }
               break;
@@ -964,6 +978,7 @@ public class CloudStore extends StoreBase {
               }
               if (operationMode == Mode.REPLICATED) {
                 session.setReplica(false);
+                localSessions.put(id, session);
               }
               sessLoader.getSessions().offer(session);
             } else if (sessionMessage.getType().equals("replicate")) {

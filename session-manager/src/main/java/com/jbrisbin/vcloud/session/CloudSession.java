@@ -18,6 +18,7 @@ package com.jbrisbin.vcloud.session;
 
 import org.apache.catalina.Manager;
 import org.apache.catalina.session.StandardSession;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
@@ -79,8 +80,16 @@ public class CloudSession extends StandardSession {
     }
   }
 
-  void setAttributeInternal(String name, Object value) {
-    attributes.put(name, value);
+  void maybeSetAttributeInternal(String name, Object value) {
+    if (!attributes.containsKey(name) || !attributes.get(name).equals(value)) {
+      attributes.put(name, value);
+    }
+  }
+
+  void maybeRemoveAttributeInternal(String name) {
+    if (attributes.containsKey(name)) {
+      attributes.remove(name);
+    }
   }
 
   @Override
@@ -105,17 +114,16 @@ public class CloudSession extends StandardSession {
     replicateRemoveAttribute(name);
   }
 
-  void removeAttributeInternal(String name) {
-    attributes.remove(name);
+  @Override
+  public void setValid(boolean isValid) {
+    super.setValid(isValid);
   }
 
   @Override
   public boolean isValid() {
-    if (this.expiring) {
-      return true;
-    }
+    Logger log = LoggerFactory.getLogger(getClass());
     if (!this.isValid) {
-      LoggerFactory.getLogger(getClass()).debug(getIdInternal() + " isValid is false");
+      log.debug(getIdInternal() + " isValid is false...");
       return false;
     }
     if (ACTIVITY_CHECK && accessCount.get() > 0) {
@@ -125,11 +133,10 @@ public class CloudSession extends StandardSession {
       long timeNow = System.currentTimeMillis();
       int timeIdle = (int) ((timeNow - thisAccessedTime) / 1000L);
       if (timeIdle >= maxInactiveInterval) {
-        LoggerFactory.getLogger(getClass())
-            .debug(String.format("%s timeIdle (%s) >= maxInactiveInterval (%s)",
-                getIdInternal(),
-                timeIdle,
-                maxInactiveInterval));
+        log.debug(String.format("%s timeIdle (%s) >= maxInactiveInterval (%s)",
+            getIdInternal(),
+            timeIdle,
+            maxInactiveInterval));
         expire(true);
       }
     }
@@ -150,15 +157,11 @@ public class CloudSession extends StandardSession {
    * @return
    */
   protected boolean needsReplicated(String name, Object obj) {
-    if (attributes.containsKey(name)) {
-      Object orig = attributes.get(name);
-      if (null != obj && obj.equals(orig)) {
-        return true;
-      } else {
-        return false;
-      }
-    } else {
+    Object orig = attributes.get(name);
+    if (null == orig || !obj.equals(orig)) {
       return true;
+    } else {
+      return false;
     }
   }
 
