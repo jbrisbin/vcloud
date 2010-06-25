@@ -10,10 +10,10 @@ Here's an example configuration:
 <pre><code>
   &lt;appender name="cloud" class="com.jbrisbin.vcloud.logging.RabbitMQAppender"&gt;
     &lt;param name="AppenderId" value="${instance.id}"/&gt;
-    &lt;param name="Host" value="mq.cloud.npci.com"/&gt;
-    &lt;param name="User" value="cloud"/&gt;
-    &lt;param name="Password" value="vcloud"/&gt;
-    &lt;param name="VirtualHost" value="cloud"/&gt;
+    &lt;param name="Host" value="mq.cloud.mycompany.com"/&gt;
+    &lt;param name="User" value="guest"/&gt;
+    &lt;param name="Password" value="guest"/&gt;
+    &lt;param name="VirtualHost" value="/"/&gt;
     &lt;param name="Exchange" value="vcloud.logging.events"/&gt;
     &lt;layout class="org.apache.log4j.PatternLayout"&gt;
       &lt;param name="ConversionPattern" value="%d %-5p %c{1} %m%n"/&gt;
