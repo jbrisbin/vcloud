@@ -28,19 +28,19 @@ import java.io.ObjectOutputStream;
  */
 public class InternalAttributeSerializer implements AttributeSerializer {
 
-  private final Logger log = LoggerFactory.getLogger( getClass() );
+  private final Logger log = LoggerFactory.getLogger(getClass());
   private Object obj;
 
-  public void setObject( Object obj ) {
+  public void setObject(Object obj) {
     this.obj = obj;
   }
 
   public byte[] serialize() {
-    if ( null != obj ) {
+    if (null != obj) {
       ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
       try {
-        ObjectOutputStream objectOut = new ObjectOutputStream( bytesOut );
-        objectOut.writeObject( obj );
+        ObjectOutputStream objectOut = new ObjectOutputStream(bytesOut);
+        objectOut.writeObject(obj);
         objectOut.flush();
         objectOut.close();
         bytesOut.flush();
@@ -48,10 +48,10 @@ public class InternalAttributeSerializer implements AttributeSerializer {
         byte[] bytes = bytesOut.toByteArray();
 
         return bytes;
-      } catch ( IOException e ) {
-        log.error( e.getMessage(), e );
+      } catch (IOException e) {
+        log.error(e.getMessage(), e);
       }
     }
-    return new byte[0];
+    return null;
   }
 }

@@ -29,31 +29,25 @@ import java.io.ObjectInputStream;
  */
 public class InternalAttributeDeserializer implements AttributeDeserializer {
 
-  private Logger log = LoggerFactory.getLogger( getClass() );
+  private Logger log = LoggerFactory.getLogger(getClass());
   private byte[] bytes;
   private Object obj = null;
   private ClassLoader classLoader;
 
-  public void setBytes( byte[] bytes ) {
+  public void setBytes(byte[] bytes) {
     this.bytes = bytes;
   }
 
-  public void setClassLoader( ClassLoader classLoader ) {
+  public void setClassLoader(ClassLoader classLoader) {
     this.classLoader = classLoader;
   }
 
-  public Object deserialize() {
-    if ( null == obj ) {
-      ByteArrayInputStream bytesIn = new ByteArrayInputStream( bytes );
-      try {
-        ObjectInputStream objectIn = (null != classLoader ? new CustomObjectInputStream( bytesIn,
-            classLoader ) : new ObjectInputStream( bytesIn ));
-        obj = objectIn.readObject();
-      } catch ( IOException e ) {
-        log.error( e.getMessage(), e );
-      } catch ( ClassNotFoundException e ) {
-        log.error( e.getMessage(), e );
-      }
+  public Object deserialize() throws IOException, ClassNotFoundException {
+    if (null == obj) {
+      ByteArrayInputStream bytesIn = new ByteArrayInputStream(bytes);
+      ObjectInputStream objectIn = (null != classLoader ? new CustomObjectInputStream(bytesIn,
+          classLoader) : new ObjectInputStream(bytesIn));
+      obj = objectIn.readObject();
     }
     return obj;
   }

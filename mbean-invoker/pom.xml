@@ -2,6 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
   <parent>
     <artifactId>core</artifactId>
     <groupId>com.jbrisbin.vcloud</groupId>
@@ -11,57 +12,38 @@
 
   <groupId>com.jbrisbin.vcloud</groupId>
   <artifactId>mbean-invoker</artifactId>
-  <version>1.0</version>
+  <version>1.0.1</version>
   <name>vCloud Catalina JMX Invoker</name>
   <packaging>jar</packaging>
-
-  <properties>
-    <catalina.version>6.0.26</catalina.version>
-    <jackson.version>1.5.1</jackson.version>
-    <rabbitmq.version>1.7.2</rabbitmq.version>
-  </properties>
 
   <dependencies>
 
     <dependency>
       <groupId>org.apache.tomcat</groupId>
       <artifactId>catalina</artifactId>
-      <version>${catalina.version}</version>
-      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.tomcat</groupId>
       <artifactId>coyote</artifactId>
-      <version>${catalina.version}</version>
-      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.tomcat</groupId>
       <artifactId>juli</artifactId>
-      <version>${catalina.version}</version>
-      <scope>provided</scope>
     </dependency>
 
     <dependency>
       <groupId>com.rabbitmq</groupId>
       <artifactId>amqp-client</artifactId>
-      <version>${rabbitmq.version}</version>
     </dependency>
     <dependency>
       <groupId>org.codehaus.jackson</groupId>
       <artifactId>jackson-core-asl</artifactId>
-      <version>${jackson.version}</version>
     </dependency>
     <dependency>
       <groupId>org.codehaus.jackson</groupId>
       <artifactId>jackson-mapper-asl</artifactId>
-      <version>${jackson.version}</version>
     </dependency>
 
   </dependencies>
-
-  <build>
-    <finalName>vcloud-${artifactId}-${version}</finalName>
-  </build>
 
 </project>

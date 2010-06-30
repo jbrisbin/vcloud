@@ -1,0 +1,36 @@
+mq.on error: {err ->
+  println " **** ERROR: ${err.message}"
+}
+
+mq {channel ->
+  channel.queueDelete("vcloud.rest.source.vm40.tc1")
+  channel.queueDelete("vcloud.rest.replication.vm33.tc3")
+  channel.queueDelete("vcloud.rest.source.vm33.tc1")
+  channel.queueDelete("vcloud.rest.replication.(none).tc1")
+  channel.queueDelete("vcloud.rest.events.(none).tc1")
+  channel.queueDelete("vcloud.rest.events.vm40.tc1")
+  channel.queueDelete("vcloud.rest.source.vm40.tc3")
+  channel.queueDelete("vcloud.rest.events.vm35.tc3")
+  channel.queueDelete("vcloud.rest.events.vm33.tc1")
+  channel.queueDelete("vcloud.rest.replication.vm40.tc1")
+  channel.queueDelete("vcloud.rest.source.jbrisbin.dev1")
+  channel.queueDelete("vcloud.rest.events.vm35.tc1")
+  channel.queueDelete("vcloud.rest.source.vm35.tc3")
+  channel.queueDelete("vcloud.rest.source.(none).tc1")
+  channel.queueDelete("vcloud.rest.events.vm33.tc3")
+  channel.queueDelete("vcloud.rest.replication.vm33.tc2")
+  channel.queueDelete("vcloud.rest.events.vm35.tc2")
+  channel.queueDelete("vcloud.rest.events.vm40.tc3")
+  channel.queueDelete("vcloud.rest.events.jbrisbin.dev1")
+  channel.queueDelete("vcloud.rest.replication.vm40.tc3")
+  channel.queueDelete("vcloud.rest.replication.vm35.tc2")
+  channel.queueDelete("vcloud.rest.events.vm33.tc2")
+  channel.queueDelete("vcloud.rest.replication.jbrisbin.dev1")
+  channel.queueDelete("vcloud.rest.source.vm35.tc1")
+  channel.queueDelete("vcloud.rest.replication.vm35.tc1")
+  channel.queueDelete("vcloud.rest.source.vm33.tc3")
+  channel.queueDelete("vcloud.rest.replication.vm33.tc1")
+  channel.queueDelete("vcloud.rest.replication.vm35.tc3")
+  channel.queueDelete("vcloud.rest.source.vm33.tc2")
+  channel.queueDelete("vcloud.rest.source.vm35.tc2")
+}

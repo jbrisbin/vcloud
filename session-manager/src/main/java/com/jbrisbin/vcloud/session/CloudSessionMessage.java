@@ -67,4 +67,11 @@ public class CloudSessionMessage {
   public void setForwarded(boolean forwarded) {
     this.forwarded = forwarded;
   }
+
+  @Override
+  public String toString() {
+    StringBuffer buff = new StringBuffer();
+    buff.append("type=").append(type).append(",source=").append(source).append("id=").append(id);
+    return buff.toString();
+  }
 }

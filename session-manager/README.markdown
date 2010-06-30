@@ -25,6 +25,8 @@ configure the Manager and Store:
 		&lt;Store className="com.jbrisbin.vcloud.session.CloudStore"
 					 storeId="${instance.id}"
 					 operationMode="oneforall"
+           maxMqHandlers="5"
+           maxRetries="3"
 					 loadTimeout="5"
 					 mqHost="localhost"
 					 mqPort="5672"
@@ -43,6 +45,18 @@ configure the Manager and Store:
 &lt;/Context&gt;
 </code></pre>
 
+#### NEW!
+
+Newly added: maxRetries. This is the maximum number of times to try and load the session from
+the RabbitMQ servers. I'm still not 100% clear on why trying it a couple times works versus just
+a longer timeout value, but the former works and the latter does not.
+
+"maxMqHandlers" is the number of handlers to start when the store fires up. There's a balance
+in your setup between an appropriate number of handlers to consume all the events versus lowering
+total memory consumption. You'll have to experiment with this setting and tweak to taste.
+
+#### Setup
+
 The property "instance.id" in this example should be unique throughout the cloud. How you
 get a cloud-unique name depends on your setup. I use convention over configuration, so
 I concatenate the VM hostname with an instance id that's unique to that node. An
@@ -51,7 +65,7 @@ example would be "vm_172_23_10_13.tc1".
 #### Operation Modes
 
 Right now, "oneforall" mode is the only really functional mode of operation. It's not as
-performant, of course, as having local objects pulled from a Map. I'm working on that.
+performant, of course, as having local objects pulled from a Map. It's a trade-off.
 
 #### Binding Pattern
 

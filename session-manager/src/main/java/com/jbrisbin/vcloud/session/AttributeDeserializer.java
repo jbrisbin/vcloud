@@ -16,6 +16,8 @@
 
 package com.jbrisbin.vcloud.session;
 
+import java.io.IOException;
+
 /**
  * @author J. Brisbin <jon@jbrisbin.com>
  */
@@ -25,5 +27,5 @@ public interface AttributeDeserializer {
 
   public void setClassLoader( ClassLoader classLoader );
 
-  public Object deserialize();
+  public Object deserialize() throws IOException, ClassNotFoundException;
 }

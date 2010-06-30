@@ -13,7 +13,6 @@
  * or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-
 package com.jbrisbin.vcloud.session;
 
 import com.rabbitmq.client.*;
@@ -113,7 +112,7 @@ public class CloudStore extends StoreBase {
    * sitting there, waiting for the session to be deserialized. Since we probably will want additional listeners
    * responsible for replication user sessions, there is a separate topic exchange just for replication events.
    */
-  protected String replicationEventsExchange = "amq.topic";
+  protected String replicationEventsExchange = null;
   /**
    * Name of the queue this store creates and binds to the replication exchange.
    */
@@ -200,6 +199,10 @@ public class CloudStore extends StoreBase {
    * The loaders put themselves in this Map so we can sweep it periodically and keep dead loaders from building up.
    */
   protected ConcurrentSkipListMap<String, SessionLoader> sessionLoaders = new ConcurrentSkipListMap<String, SessionLoader>();
+  /**
+   * The maximum number of times to attempt to load the session.
+   */
+  protected int maxRetries = 3;
 
   public CloudStore() {
   }
@@ -395,6 +398,14 @@ public class CloudStore extends StoreBase {
     this.deleteQueuesOnStop = deleteQueuesOnStop;
   }
 
+  public int getMaxRetries() {
+    return maxRetries;
+  }
+
+  public void setMaxRetries(int maxRetries) {
+    this.maxRetries = maxRetries;
+  }
+
   @Override
   public String getInfo() {
     return info;
@@ -460,11 +471,6 @@ public class CloudStore extends StoreBase {
    * @throws IOException
    */
   public Session load(String id) throws ClassNotFoundException, IOException {
-    if (DEBUG) {
-      log.debug("Cloud sessions: " + sessions.toString());
-      log.debug("Local sessions: " + localSessions.toString());
-    }
-
     // Check locally first
     CloudSession session = localSessions.get(id);
     if (null != session) {
@@ -481,18 +487,29 @@ public class CloudStore extends StoreBase {
         log.debug("Loading session from the cloud: " + id);
       }
       Future f = null;
-      if (null == (loader = sessionLoaders.get(id))) {
-        loader = new SessionLoader(id);
-        sessionLoaders.put(id, loader);
-        f = workerPool.submit(loader);
-      }
-      session = loader.getSession();
-      if (null == session) {
-        if (DEBUG) {
-          log.debug(" ***** SESSION LOADER TIMEOUT! *****");
-          log.debug("Loader: " + loader.toString());
-          log.debug("Cloud: " + sessions.toString());
-          log.debug("Local: " + localSessions.toString());
+      for (int i = 0; i < maxRetries; i++) {
+        if (DEBUG && i > 0) {
+          log.debug("********* Load attempt: " + (i + 1));
+        }
+        if (null == (loader = sessionLoaders.get(id))) {
+          loader = new SessionLoader(id);
+          sessionLoaders.put(id, loader);
+          f = workerPool.submit(loader);
+        }
+        session = loader.getSession();
+        if (null == session) {
+          if (DEBUG) {
+            log.debug(" ***** SESSION LOADER TIMEOUT! *****");
+            log.debug("Loader: " + loader.toString());
+            log.debug("Cloud: " + sessions.toString());
+            log.debug("Local: " + localSessions.toString());
+          }
+        } else {
+          if (DEBUG) {
+            double runtime = ((System.currentTimeMillis() - loader.getStartTime()) * .001);
+            log.debug("Loader runtime: " + new DecimalFormat("#.###s").format(runtime));
+          }
+          break;
         }
       }
       if (null != f) {
@@ -500,10 +517,6 @@ public class CloudStore extends StoreBase {
         if (!f.isDone()) {
           f.cancel(true);
         }
-      }
-      if (DEBUG) {
-        double runtime = ((System.currentTimeMillis() - loader.getStartTime()) * .001);
-        log.debug("Loader runtime: " + new DecimalFormat("#.###s").format(runtime));
       }
     }
 
@@ -517,6 +530,7 @@ public class CloudStore extends StoreBase {
    * @param id
    * @throws IOException
    */
+
   public void remove(String id) throws IOException {
     sessions.remove(id);
     localSessions.remove(id);
@@ -553,6 +567,7 @@ public class CloudStore extends StoreBase {
         channel.queueBind(sourceEventsQueue, sessionEventsExchange, qname);
       }
       sendEvent("touch", id.getBytes());
+      replicateSession(session);
     }
     localSessions.put(id, (CloudSession) session);
   }
@@ -645,28 +660,24 @@ public class CloudStore extends StoreBase {
       synchronized (mqChannel) {
         // Messages bound for all nodes in cluster go here
         mqChannel.exchangeDeclare(eventsExchange, "fanout", true);
-        mqChannel.queueDeclare(eventsQueue, true);
+        mqChannel.queueDeclare(eventsQueue, true, false, false, null);
         mqChannel.queueBind(eventsQueue, eventsExchange, "");
 
         // Messages bound for just this node go here
-        mqChannel.queueDeclare(sourceEventsQueue, false);
+        mqChannel.queueDeclare(sourceEventsQueue, true, false, false, null);
 
         // Session events
         mqChannel.exchangeDeclare(sessionEventsExchange, "topic", true);
 
         // Replication events
-        mqChannel.exchangeDeclare(replicationEventsExchange, "topic", true);
-        mqChannel.queueDeclare(replicationEventsQueue, false);
-        mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, replicationEventsRoutingKey);
+        if (null != replicationEventsExchange && !replicationEventsExchange.trim().equals("")) {
+          mqChannel.exchangeDeclare(replicationEventsExchange, "topic", true);
+          mqChannel.queueDeclare(replicationEventsQueue, true, false, false, null);
+          mqChannel.queueBind(replicationEventsQueue, replicationEventsExchange, replicationEventsRoutingKey);
+        }
       }
 
-      for (int i = 0; i < maxMqHandlers; i++) {
-        workers.add(workerPool.submit(new EventListener(eventsQueue)));
-        workers.add(workerPool.submit(new EventListener(sourceEventsQueue)));
-        workers.add(workerPool.submit(new EventListener(replicationEventsQueue)));
-        workers.add(workerPool.submit(new UpdateEventHandler()));
-        workers.add(workerPool.submit(new LoadEventHandler()));
-      }
+      startWorkers();
 
     } catch (IOException e) {
       log.error(e.getMessage(), e);
@@ -691,7 +702,17 @@ public class CloudStore extends StoreBase {
     try {
       // Make sure local sessions are replicated off this server
       for (Session session : localSessions.values()) {
-        //replicateSession( session );
+        replicateSession(session);
+        localSessions.remove(session.getId());
+      }
+
+      // Wait until all sessions are replicated
+      while (localSessions.size() > 0) {
+        try {
+          Thread.sleep(300);
+        } catch (InterruptedException e) {
+          log.error(e.getMessage(), e);
+        }
       }
 
       synchronized (this) {
@@ -712,13 +733,46 @@ public class CloudStore extends StoreBase {
     Registry.getRegistry(null, null).unregisterComponent(objectName);
 
     // Stop worker threads
+    stopWorkers();
+    MDC.remove("method");
+    setState("stopped");
+  }
+
+  protected void stopWorkers() {
     for (Future f : workers) {
       f.cancel(true);
     }
-    listenerPool.shutdownNow();
-    workerPool.shutdownNow();
-    MDC.remove("method");
-    setState("stopped");
+    try {
+      listenerPool.shutdownNow();
+    } catch (Throwable t) {
+      // IGNORED
+    }
+    try {
+      workerPool.shutdownNow();
+    } catch (Throwable t) {
+      // IGNORED
+    }
+    workers.clear();
+  }
+
+  protected void startWorkers() throws IOException {
+    for (int i = 0; i < maxMqHandlers; i++) {
+      workers.add(workerPool.submit(new EventListener(eventsQueue)));
+      workers.add(workerPool.submit(new EventListener(sourceEventsQueue)));
+      workers.add(workerPool.submit(new EventListener(replicationEventsQueue)));
+      workers.add(workerPool.submit(new UpdateEventHandler()));
+      workers.add(workerPool.submit(new LoadEventHandler()));
+    }
+  }
+
+  protected void restartListeners() throws IOException {
+    Channel channel = getMqChannel();
+    synchronized (channel) {
+      for (String id : localSessions.keySet()) {
+        String qname = String.format(sessionEventsQueuePattern, id);
+        channel.queueBind(sourceEventsQueue, sessionEventsExchange, qname);
+      }
+    }
   }
 
   /**
@@ -748,26 +802,26 @@ public class CloudStore extends StoreBase {
     }
   }
 
-  protected Connection getMqConnection() throws IOException {
-    ConnectionParameters cparams = new ConnectionParameters();
-    cparams.setUsername(mqUser);
-    cparams.setPassword(mqPassword);
-    cparams.setVirtualHost(mqVirtualHost);
-    return new ConnectionFactory(cparams).newConnection(mqHost, mqPort);
+  protected synchronized Connection getMqConnection() throws IOException {
+    if (null == mqConnection) {
+      ConnectionFactory factory = new ConnectionFactory();
+      factory.setHost(mqHost);
+      factory.setPort(mqPort);
+      factory.setUsername(mqUser);
+      factory.setPassword(mqPassword);
+      factory.setVirtualHost(mqVirtualHost);
+      factory.setRequestedHeartbeat(10);
+      mqConnection = factory.newConnection();
+    }
+    return mqConnection;
   }
 
-  protected Channel getMqChannel() throws IOException {
-    if (null == mqConnection || !mqConnection.isOpen()) {
-      if (DEBUG) {
-        log.debug("Creating a new RabbitMQ connection...");
-      }
-      mqConnection = getMqConnection();
-    }
-    if (null == mqChannel || !mqChannel.isOpen()) {
+  protected synchronized Channel getMqChannel() throws IOException {
+    if (null == mqChannel) {
       if (DEBUG) {
         log.debug("Creating a new RabbitMQ channel...");
       }
-      mqChannel = mqConnection.createChannel();
+      mqChannel = getMqConnection().createChannel();
     }
     return mqChannel;
   }
@@ -908,9 +962,13 @@ public class CloudStore extends StoreBase {
                 attr = headers.get("attribute").toString();
                 session = localSessions.get(id);
                 if (null != session) {
-                  AttributeDeserializer deser = getAttributeDeserializer(delivery.getBody());
-                  Object obj = deser.deserialize();
-                  session.maybeSetAttributeInternal(attr, obj);
+                  try {
+                    AttributeDeserializer deser = getAttributeDeserializer(delivery.getBody());
+                    Object obj = deser.deserialize();
+                    session.maybeSetAttributeInternal(attr, obj);
+                  } catch (Throwable t) {
+                    log.error(t.getMessage(), t);
+                  }
                 }
               }
               break;
@@ -927,7 +985,8 @@ public class CloudStore extends StoreBase {
           }
           MDC.remove("method");
         } catch (InterruptedException e) {
-          log.error(e.getMessage(), e);
+          // Only DEBUG these, as they're generated on shutdown
+          log.debug(e.getMessage(), e);
         }
       }
     }
@@ -950,6 +1009,9 @@ public class CloudStore extends StoreBase {
         CloudSessionMessage sessionMessage;
         try {
           sessionMessage = updateEvents.take();
+          if (DEBUG) {
+            log.debug("************************ Update event: " + sessionMessage.toString());
+          }
           MDC.put("method", "processUpdateEvent()");
           CloudSession session = (CloudSession) manager.createEmptySession();
           InternalSessionDeserializer deserializer = new InternalSessionDeserializer(session);
@@ -1020,6 +1082,9 @@ public class CloudStore extends StoreBase {
       while (true) {
         try {
           CloudSessionMessage sessionMessage = loadEvents.take();
+          if (DEBUG) {
+            log.debug("************************ Load event: " + sessionMessage.toString());
+          }
           MDC.put("method", "processLoadEvent()");
           String id = sessionMessage.getId();
 
