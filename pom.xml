@@ -27,6 +27,8 @@
   <packaging>pom</packaging>
 
   <properties>
+    <catalina.version>6.0.26</catalina.version>
+    <jackson.version>1.5.3</jackson.version>
     <junit.version>4.7</junit.version>
     <log4j.version>1.2.15</log4j.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -40,7 +42,6 @@
     <module>mbean-invoker</module>
     <module>file-sync</module>
     <module>amqp-appender</module>
-    <module>redis-map</module>
     <module>amqp-classloader</module>
   </modules>
 
@@ -102,6 +103,33 @@
             <artifactId>commons-cli</artifactId>
           </exclusion>
         </exclusions>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.tomcat</groupId>
+        <artifactId>catalina</artifactId>
+        <version>${catalina.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.tomcat</groupId>
+        <artifactId>coyote</artifactId>
+        <version>${catalina.version}</version>
+      </dependency>
+      <!--dependency>
+        <groupId>org.apache.tomcat</groupId>
+        <artifactId>juli</artifactId>
+        <version>${catalina.version}</version>
+      </dependency-->
+
+      <dependency>
+        <groupId>org.codehaus.jackson</groupId>
+        <artifactId>jackson-core-asl</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.codehaus.jackson</groupId>
+        <artifactId>jackson-mapper-asl</artifactId>
+        <version>${jackson.version}</version>
       </dependency>
 
       <!-- Testing -->
