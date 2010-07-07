@@ -2,25 +2,17 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <parent>
+    <artifactId>core</artifactId>
+    <groupId>com.jbrisbin.vcloud</groupId>
+    <version>1.0</version>
+  </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.jbrisbin.vcloud</groupId>
-  <artifactId>session-manager</artifactId>
-  <version>1.2.0</version>
-  <name>vCloud Catalina Session Manager</name>
-  <packaging>jar</packaging>
-
-  <properties>
-    <catalina.version>6.0.26</catalina.version>
-    <rabbitmq.version>1.8.0</rabbitmq.version>
-    <slf4j.version>1.6.0</slf4j.version>
-  </properties>
-
-  <parent>
-    <groupId>com.jbrisbin.vcloud</groupId>
-    <artifactId>core</artifactId>
-    <version>1.0</version>
-  </parent>
+  <artifactId>spring-security</artifactId>
+  <name>vCloud Spring Security Integration</name>
+  <version>1.0.0</version>
 
   <dependencies>
 
@@ -55,6 +47,20 @@
       <groupId>org.apache.tomcat</groupId>
       <artifactId>juli</artifactId>
     </dependency-->
+
+    <!-- Spring Security -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-config</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-web</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>com.rabbitmq</groupId>

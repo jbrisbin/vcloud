@@ -35,14 +35,16 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <rabbitmq.version>1.8.0</rabbitmq.version>
     <slf4j.version>1.6.0</slf4j.version>
+    <spring.version>3.0.3.RELEASE</spring.version>
+    <spring.security.version>3.0.3.RELEASE</spring.security.version>
   </properties>
 
   <modules>
-    <module>session-manager</module>
-    <module>mbean-invoker</module>
-    <module>file-sync</module>
     <module>amqp-appender</module>
     <module>amqp-classloader</module>
+    <module>mbean-invoker</module>
+    <module>session-manager</module>
+    <module>spring-security</module>
   </modules>
 
   <dependencyManagement>
@@ -130,6 +132,23 @@
         <groupId>org.codehaus.jackson</groupId>
         <artifactId>jackson-mapper-asl</artifactId>
         <version>${jackson.version}</version>
+      </dependency>
+
+      <!-- Spring Security -->
+      <dependency>
+        <groupId>org.springframework.security</groupId>
+        <artifactId>spring-security-core</artifactId>
+        <version>${spring.security.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.security</groupId>
+        <artifactId>spring-security-config</artifactId>
+        <version>${spring.security.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.security</groupId>
+        <artifactId>spring-security-web</artifactId>
+        <version>${spring.security.version}</version>
       </dependency>
 
       <!-- Testing -->

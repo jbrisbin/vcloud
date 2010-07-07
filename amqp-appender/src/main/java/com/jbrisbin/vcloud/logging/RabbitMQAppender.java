@@ -1,6 +1,9 @@
 package com.jbrisbin.vcloud.logging;
 
-import com.rabbitmq.client.*;
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.Layout;
 import org.apache.log4j.spi.LoggingEvent;
@@ -20,7 +23,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
   private final Logger log = LoggerFactory.getLogger(getClass());
   private final boolean DEBUG = log.isDebugEnabled();
-  private ConnectionParameters connParams = new ConnectionParameters();
+  private ConnectionFactory factory = new ConnectionFactory();
   private Connection connection = null;
   private Channel channel = null;
   private String host = "localhost";
@@ -34,12 +37,17 @@ public class RabbitMQAppender extends AppenderSkeleton {
   private String queueNameFormatString = "%s.%s";
   private ExecutorService workerPool = Executors.newCachedThreadPool();
 
+  public RabbitMQAppender() {
+
+  }
+
   public String getHost() {
     return host;
   }
 
   public void setHost(String host) {
     this.host = host;
+    factory.setHost(host);
   }
 
   public int getPort() {
@@ -48,6 +56,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
   public void setPort(int port) {
     this.port = port;
+    factory.setPort(port);
   }
 
   public String getUser() {
@@ -56,7 +65,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
   public void setUser(String user) {
     this.user = user;
-    connParams.setUsername(user);
+    factory.setUsername(user);
   }
 
   public String getPassword() {
@@ -65,7 +74,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
   public void setPassword(String password) {
     this.password = password;
-    connParams.setPassword(password);
+    factory.setPassword(password);
   }
 
   public String getVirtualHost() {
@@ -74,7 +83,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
   public void setVirtualHost(String virtualHost) {
     this.virtualHost = virtualHost;
-    connParams.setVirtualHost(virtualHost);
+    factory.setVirtualHost(virtualHost);
   }
 
   public int getPublishPoolMaxSize() {
@@ -96,7 +105,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
     try {
       mq = getChannel();
       synchronized (mq) {
-        mq.exchangeDeclare(exchange, "topic", true, true, false, null);
+        mq.exchangeDeclare(exchange, "topic", true, false, null);
       }
     } catch (IOException e) {
       log.error(e.getMessage(), e);
@@ -149,6 +158,14 @@ public class RabbitMQAppender extends AppenderSkeleton {
     return true;
   }
 
+  protected void setFactoryDefaults() {
+    factory.setHost("localhost");
+    factory.setPort(5672);
+    factory.setUsername("guest");
+    factory.setPassword("guest");
+    factory.setVirtualHost("/");
+  }
+
   protected Channel getChannel() throws IOException {
     if (null == channel || !channel.isOpen()) {
       if (DEBUG) {
@@ -164,7 +181,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
       if (DEBUG) {
         log.debug("Opening a new connection...");
       }
-      connection = new ConnectionFactory(connParams).newConnection(host, port);
+      connection = factory.newConnection();
     }
     return connection;
   }
