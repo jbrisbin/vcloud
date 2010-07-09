@@ -11,7 +11,7 @@
 
   <groupId>com.jbrisbin.vcloud</groupId>
   <artifactId>async-cache</artifactId>
-  <data>vCloud Asynchronous Distributed Cache</data>
+  <name>vCloud Asynchronous Distributed Cache</name>
   <version>1.0.0</version>
 
   <dependencies>

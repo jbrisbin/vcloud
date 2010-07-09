@@ -11,7 +11,7 @@
 
   <groupId>com.jbrisbin.vcloud</groupId>
   <artifactId>amqp-appender</artifactId>
-  <data>vCloud AMQP Log4J Appender</data>
+  <name>vCloud AMQP Log4J Appender</name>
   <version>1.0.1</version>
 
   <dependencies>

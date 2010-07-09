@@ -23,7 +23,7 @@
   <groupId>com.jbrisbin.vcloud</groupId>
   <artifactId>core</artifactId>
   <version>1.0</version>
-  <data>vCloud</data>
+  <name>vCloud</name>
   <packaging>pom</packaging>
 
   <properties>

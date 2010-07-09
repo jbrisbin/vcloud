@@ -13,7 +13,7 @@
   <groupId>com.jbrisbin.vcloud</groupId>
   <artifactId>mbean-invoker</artifactId>
   <version>1.0.1</version>
-  <data>vCloud Catalina JMX Invoker</data>
+  <name>vCloud Catalina JMX Invoker</name>
   <packaging>jar</packaging>
 
   <dependencies>
