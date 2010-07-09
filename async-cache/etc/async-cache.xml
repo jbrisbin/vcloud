@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:p="http://www.springframework.org/schema/p"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+  <context:annotation-config />
+
+  <bean id="connectionFactory" class="com.rabbitmq.client.ConnectionFactory"
+        p:host="localhost"
+        p:port="5672"
+        p:username="guest"
+        p:password="guest"
+        p:virtualHost="/"
+        p:requestedHeartbeat="10" />
+
+  <bean id="workerPool"
+        class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor"
+        p:threadNamePrefix="async-cache-"
+        p:corePoolSize="10" />
+  <bean id="asyncCache" class="com.jbrisbin.vcloud.cache.RabbitMQAsyncCacheProvider"
+        p:id="test.1"
+        p:heartbeatExchange="vcloud.cache.heartbeat"
+        p:heartbeatInterval="15000"
+        p:maxWorkers="5"
+        p:objectRequestExchangechange="vcloud.cache.objects"
+        p:cacheNodeQueueNameueName="test.1" />
+
+</beans>

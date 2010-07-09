@@ -8,7 +8,7 @@ This is why I wrote this appender. It's pretty simple. There's not many moving p
 Here's an example configuration:
 
 <pre><code>  &lt;appender name="cloud" class="com.jbrisbin.vcloud.logging.RabbitMQAppender"&gt;
-    &lt;param name="AppenderId" value="${instance.id}"/&gt;
+    &lt;param name="AppenderId" value="${instance.replyTo}"/&gt;
     &lt;param name="Host" value="mq.cloud.mycompany.com"/&gt;
     &lt;param name="User" value="guest"/&gt;
     &lt;param name="Password" value="guest"/&gt;

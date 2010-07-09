@@ -23,7 +23,7 @@ configure the Manager and Store:
 
   &lt;Manager className="com.jbrisbin.vcloud.session.CloudManager"&gt;
 		&lt;Store className="com.jbrisbin.vcloud.session.CloudStore"
-					 storeId="${instance.id}"
+					 storeId="${instance.replyTo}"
 					 operationMode="oneforall"
            maxMqHandlers="5"
            maxRetries="3"
@@ -34,12 +34,12 @@ configure the Manager and Store:
 					 mqPassword="guest"
 					 mqVirtualHost="/"
 					 eventsExchange="vcloud.dev.events"
-					 eventsQueue="vcloud.dev.events.${instance.id}"
-					 sourceEventsQueue="vcloud.dev.source.${instance.id}"
+					 eventsQueue="vcloud.dev.events.${instance.replyTo}"
+					 sourceEventsQueue="vcloud.dev.source.${instance.replyTo}"
 					 sessionEventsExchange="vcloud.dev.sessions"
 					 sessionEventsQueuePattern="vcloud.dev.sessions.%s"
 					 replicationEventsExchange="vcloud.dev.replication"
-					 replicationEventsQueue="vcloud.replication.${instance.id}"/&gt;
+					 replicationEventsQueue="vcloud.replication.${instance.replyTo}"/&gt;
   &lt;/Manager&gt;
 
 &lt;/Context&gt;
@@ -57,9 +57,9 @@ total memory consumption. You'll have to experiment with this setting and tweak 
 
 #### Setup
 
-The property "instance.id" in this example should be unique throughout the cloud. How you
+The property "instance.replyTo" in this example should be unique throughout the cloud. How you
 get a cloud-unique name depends on your setup. I use convention over configuration, so
-I concatenate the VM hostname with an instance id that's unique to that node. An
+I concatenate the VM hostname with an instance replyTo that's unique to that node. An
 example would be "vm_172_23_10_13.tc1".
 
 #### Operation Modes

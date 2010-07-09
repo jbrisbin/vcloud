@@ -8,8 +8,12 @@
     </layout>
   </appender>
 
-  <root>
+  <category name="org.springframework">
     <level value="INFO" />
+  </category>
+
+  <root>
+    <level value="DEBUG" />
     <appender-ref ref="console" />
   </root>
 

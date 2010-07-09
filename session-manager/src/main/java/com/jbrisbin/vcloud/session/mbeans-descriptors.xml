@@ -62,8 +62,8 @@
                description="Remove a session."
                impact="ACTION"
                returnType="void">
-      <parameter name="id"
-                 description="Session id to remove."
+      <parameter name="replyTo"
+                 description="Session replyTo to remove."
                  type="java.lang.String"/>
     </operation>
     <operation name="clearLocalSessions"
