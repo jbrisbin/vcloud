@@ -170,21 +170,22 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
       log.error( e.getMessage(), e );
     }
 
-    /*
     activeTasks.add( workerPool.submit( new HeartbeatMonitor() ) );
     delayTimer.scheduleAtFixedRate( new TimerTask() {
       @Override
       public void run() {
-        taskPool.execute( new SendEvent( "ping", heartbeatExchange, "", id.getBytes() ) );
+        workerPool.execute( new SendEvent( "ping", heartbeatExchange, "", id.getBytes() ) );
       }
-    }, 100, heartbeatInterval );
+    }, 0, heartbeatInterval );
     delayTimer.scheduleAtFixedRate( new TimerTask() {
       @Override
       public void run() {
         numOfPeers.set( peers.size() );
+        if ( debug ) {
+          log.debug( "Expecting responses from " + numOfPeers.get() + " peers." );
+        }
       }
     }, heartbeatInterval, heartbeatInterval );
-     */
 
     for ( int i = 0; i < maxWorkers; i++ ) {
       activeTasks.add( workerPool.submit( new ObjectMonitor() ) );
@@ -221,13 +222,29 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
 
   @Override
   public void add( String id, Object obj ) {
-    add( id, obj, Long.MAX_VALUE );
+    byte[] bytes = new byte[0];
+    try {
+      bytes = serialize( obj );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
+    }
+    add( id, bytes, Long.MAX_VALUE );
   }
 
   @Override
   public void add( String id, Object obj, long expiry ) {
+    byte[] bytes = new byte[0];
+    try {
+      bytes = serialize( obj );
+    } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
+    }
+    add( id, bytes, expiry );
+  }
+
+  protected void add( String id, byte[] bytes, long expiry ) {
     CacheEntry entry = new CacheEntry();
-    entry.value = obj;
+    entry.value = bytes;
     entry.expiration = expiry;
     objectCache.put( id, entry );
   }
@@ -333,16 +350,17 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
 
     String correlationId;
     String replyTo;
-    Object obj;
+    byte[] body;
 
-    ObjectSendEvent( String correlationId, String replyTo, Object obj ) {
+    ObjectSendEvent( String correlationId, String replyTo, byte[] body ) {
       this.correlationId = correlationId;
       this.replyTo = replyTo;
-      this.obj = obj;
+      this.body = body;
     }
 
     @Override
     public void run() {
+      long startTime = System.currentTimeMillis();
       Channel channel = null;
       try {
         channel = getConnection().createChannel();
@@ -350,8 +368,6 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
         properties.setType( "response" );
         properties.setCorrelationId( correlationId );
         properties.setReplyTo( cacheNodeQueueName );
-
-        byte[] body = (null != obj ? serialize( obj ) : new byte[0]);
         channel.basicPublish( "", replyTo, properties, body );
       } catch ( IOException e ) {
         log.error( e.getMessage(), e );
@@ -359,6 +375,11 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
         try {
           channel.close();
         } catch ( IOException e ) {
+        }
+        long endTime = System.currentTimeMillis();
+        if ( debug ) {
+          long interval = endTime - startTime;
+          log.debug( "Object sent in " + interval + "ms" );
         }
       }
     }
@@ -421,6 +442,7 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
       try {
         while ( true ) {
           QueueingConsumer.Delivery delivery = objectRequests.take();
+          long startTime = System.currentTimeMillis();
           AMQP.BasicProperties properties = delivery.getProperties();
           String correlationId = properties.getCorrelationId();
           String type = properties.getType();
@@ -431,42 +453,32 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
                 .toString() );
           }
           if ( "store".equals( type ) ) {
-            Object obj = null;
-            try {
-              try {
-                obj = deserialize( delivery.getBody() );
-              } catch ( IOException e ) {
-                log.error( e.getMessage(), e );
-              }
-              if ( null != obj ) {
-                Map<String, Object> headers = properties.getHeaders();
-                if ( null != headers && headers.containsKey( "expiration" ) ) {
-                  long expiry = Long.parseLong( headers.get( "expiration" ).toString() );
-                  add( objectId, obj, expiry );
-                } else {
-                  add( objectId, obj );
-                }
+            byte[] bytes = delivery.getBody();
+            if ( null != bytes && bytes.length > 0 ) {
+              Map<String, Object> headers = properties.getHeaders();
+              if ( null != headers && headers.containsKey( "expiration" ) ) {
+                long expiry = Long.parseLong( headers.get( "expiration" ).toString() );
+                add( objectId, bytes, expiry );
               } else {
-                log.warn( "Won't add a NULL object: " + objectId );
+                add( objectId, bytes, Long.MAX_VALUE );
               }
-            } catch ( ClassNotFoundException e ) {
-              log.error( e.getMessage(), e );
+            } else {
+              log.warn( "Won't add a NULL object: " + objectId );
             }
           } else if ( "load".equals( type ) ) {
             CacheEntry entry = objectCache.get( objectId );
-            Object obj = null;
+            byte[] bytes = new byte[0];
             if ( null != entry ) {
               long interval = (System.currentTimeMillis() - entry.createdAt);
               if ( interval < entry.expiration ) {
-                obj = entry.value;
+                bytes = entry.value;
               } else {
                 remove( objectId );
               }
             } else {
               log.warn( "No object with ID " + objectId + " found" );
             }
-            workerPool.execute(
-                new ObjectSendEvent( objectId, replyTo, (null != obj ? obj : null) ) );
+            workerPool.execute( new ObjectSendEvent( objectId, replyTo, bytes ) );
           } else if ( "clear".equals( type ) ) {
             if ( objectId.equals( "#" ) ) {
               objectCache.clear();
@@ -487,6 +499,12 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
               }
             }
           }
+
+          long endTime = System.currentTimeMillis();
+          if ( debug ) {
+            long interval = endTime - startTime;
+            log.debug( "Processed message in " + interval + "ms" );
+          }
         }
       } catch ( InterruptedException e ) {
         // IGNORED
@@ -496,7 +514,7 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
 
   class CacheEntry {
     final long createdAt = System.currentTimeMillis();
-    Object value;
+    byte[] value;
     long expiration;
     String parent = null;
   }

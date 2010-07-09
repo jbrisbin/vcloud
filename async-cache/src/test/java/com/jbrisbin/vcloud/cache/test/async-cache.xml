@@ -22,7 +22,7 @@
         p:id="test.provider"
         p:heartbeatExchange="vcloud.cache.heartbeat"
         p:heartbeatInterval="15000"
-        p:maxWorkers="25"
+        p:maxWorkers="5"
         p:objectRequestExchange="vcloud.cache.objects"
         p:cacheNodeQueueName="test.provider" />
 
@@ -32,7 +32,7 @@
         p:id="test.cache"
         p:heartbeatExchange="vcloud.cache.heartbeat"
         p:heartbeatInterval="15000"
-        p:maxWorkers="25"
+        p:maxWorkers="5"
         p:objectRequestExchange="vcloud.cache.objects" />
 
 </beans>

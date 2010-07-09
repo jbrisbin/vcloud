@@ -216,9 +216,8 @@ public class RabbitMQAsyncCache implements AsyncCache {
       log.error( e.getMessage(), e );
     }
 
-    /*
-    workerPool.submit( new HeartbeatMonitor() );
-    taskPool.submit( new SendEvent( "ping", heartbeatExchange, "", new byte[0] ) );
+    activeTasks.add( workerPool.submit( new HeartbeatMonitor() ) );
+    workerPool.submit( new SendEvent( "ping", heartbeatExchange, "", new byte[0] ) );
     delayTimer.scheduleAtFixedRate( new TimerTask() {
       @Override
       public void run() {
@@ -227,7 +226,6 @@ public class RabbitMQAsyncCache implements AsyncCache {
         }
       }
     }, 0, heartbeatInterval );
-     */
 
     // For loading objects
     for ( int i = 0; i < maxWorkers; i++ ) {
@@ -340,6 +338,7 @@ public class RabbitMQAsyncCache implements AsyncCache {
       try {
         while ( true ) {
           QueueingConsumer.Delivery delivery = loadResponses.take();
+          long startTime = System.currentTimeMillis();
           AMQP.BasicProperties properties = delivery.getProperties();
           String type = properties.getType();
           String objectId = properties.getCorrelationId();
@@ -348,6 +347,10 @@ public class RabbitMQAsyncCache implements AsyncCache {
             Object obj;
             if ( body.length > 0 ) {
               try {
+                if ( debug ) {
+                  long interval = System.currentTimeMillis() - startTime;
+                  log.debug( "Before deserialize at " + interval + "ms" );
+                }
                 obj = deserialize( delivery.getBody() );
               } catch ( ClassNotFoundException e ) {
                 log.error( e.getMessage(), e );
@@ -358,6 +361,10 @@ public class RabbitMQAsyncCache implements AsyncCache {
               }
             } else {
               obj = new NullObject();
+            }
+            if ( debug ) {
+              long interval = System.currentTimeMillis() - startTime;
+              log.debug( "Before callbacks at " + interval + "ms" );
             }
             List<AsyncCacheCallback> callbacks = objectLoadCallbacks.get( objectId );
             synchronized (callbacks) {
@@ -374,6 +381,12 @@ public class RabbitMQAsyncCache implements AsyncCache {
             }
           } else {
             log.warn( "Invalid message type: '" + type + "': " + properties );
+          }
+
+          long endTime = System.currentTimeMillis();
+          if ( debug ) {
+            long interval = endTime - startTime;
+            log.debug( "Load response processed in " + interval + "ms" );
           }
         }
       } catch ( InterruptedException e ) {

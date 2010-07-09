@@ -52,8 +52,8 @@ public class Bootstrap {
     }
 
     ApplicationContext context = new FileSystemXmlApplicationContext( configFile );
-    AsyncCache cacheProvider = (AsyncCache) context.getBean( "cacheProvider" );
-    cacheProvider.start();
+    RabbitMQAsyncCacheProvider cacheProvider = context
+        .getBean( RabbitMQAsyncCacheProvider.class );
     while ( cacheProvider.isActive() ) {
       try {
         Thread.sleep( 3000 );
@@ -61,7 +61,6 @@ public class Bootstrap {
         log.error( e.getMessage(), e );
       }
     }
-    cacheProvider.stop();
 
   }
 }
