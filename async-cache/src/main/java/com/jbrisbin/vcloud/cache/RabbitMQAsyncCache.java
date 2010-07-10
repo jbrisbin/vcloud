@@ -403,19 +403,21 @@ public class RabbitMQAsyncCache implements AsyncCache {
                 log.error( e.getMessage(), e );
                 obj = e;
               }
-            }
-            List<AsyncCacheCallback> callbacks = objectLoadCallbacks.get( objectId );
-            synchronized (callbacks) {
-              if ( null != callbacks ) {
-                for ( AsyncCacheCallback callback : callbacks ) {
-                  if ( obj instanceof Throwable ) {
-                    callback.onError( (Throwable) obj );
-                  } else {
-                    callback.onObjectLoad( obj );
+              List<AsyncCacheCallback> callbacks = objectLoadCallbacks.get( objectId );
+              synchronized (callbacks) {
+                if ( null != callbacks ) {
+                  for ( AsyncCacheCallback callback : callbacks ) {
+                    if ( obj instanceof Throwable ) {
+                      callback.onError( (Throwable) obj );
+                    } else {
+                      callback.onObjectLoad( obj );
+                    }
                   }
+                  callbacks.clear();
                 }
-                callbacks.clear();
               }
+            } else {
+              // TODO: Handle null messages
             }
           } else {
             log.warn( "Invalid message type: '" + type + "': " + properties );
