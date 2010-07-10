@@ -88,6 +88,7 @@ public class RabbitMQAsyncCache implements AsyncCache {
   protected ConcurrentSkipListMap<String, List<AsyncCacheCallback>> objectLoadCallbacks = new ConcurrentSkipListMap<String, List<AsyncCacheCallback>>();
   protected BlockingQueue<QueueingConsumer.Delivery> loadResponses = new LinkedBlockingQueue<QueueingConsumer.Delivery>();
   protected QueueingConsumer loadConsumer;
+  protected BlockingQueue<SendEvent> sendEvents = new LinkedBlockingQueue<SendEvent>();
 
   public RabbitMQAsyncCache() {
   }
@@ -159,8 +160,15 @@ public class RabbitMQAsyncCache implements AsyncCache {
   public void add( String id, Object obj, long expiry ) {
     try {
       byte[] body = serialize( obj );
-      workerPool.submit( new SendEvent( "store", objectRequestExchange, id, body ) );
+      SendEvent event = sendEvents.take();
+      event.setEvent( "store" );
+      event.setExchange( objectRequestExchange );
+      event.setRoutingKey( id );
+      event.setBody( body );
+      workerPool.submit( event );
     } catch ( IOException e ) {
+      log.error( e.getMessage(), e );
+    } catch ( InterruptedException e ) {
       log.error( e.getMessage(), e );
     }
   }
@@ -172,16 +180,31 @@ public class RabbitMQAsyncCache implements AsyncCache {
 
   @Override
   public void remove( String id ) {
-    workerPool.submit( new SendEvent( "clear", objectRequestExchange, "id", new byte[0] ) );
+    try {
+      SendEvent event = sendEvents.take();
+      event.setEvent( "clear" );
+      event.setExchange( objectRequestExchange );
+      event.setRoutingKey( id );
+      workerPool.submit( event );
+    } catch ( InterruptedException e ) {
+      log.error( e.getMessage(), e );
+    }
   }
 
   @Override
   public void remove( String id, long delay ) {
-    SendEvent event = new SendEvent( "clear", objectRequestExchange, id, new byte[0] );
-    Map<String, Object> headers = new LinkedHashMap<String, Object>();
-    headers.put( "expiration", delay );
-    event.properties.setHeaders( headers );
-    workerPool.submit( event );
+    try {
+      SendEvent event = sendEvents.take();
+      event.setEvent( "clear" );
+      event.setExchange( objectRequestExchange );
+      event.setRoutingKey( id );
+      Map<String, Object> headers = new LinkedHashMap<String, Object>();
+      headers.put( "expiration", delay );
+      event.properties.setHeaders( headers );
+      workerPool.submit( event );
+    } catch ( InterruptedException e ) {
+      log.error( e.getMessage(), e );
+    }
   }
 
   @Override
@@ -193,12 +216,29 @@ public class RabbitMQAsyncCache implements AsyncCache {
       callbacks.add( callback );
       objectLoadCallbacks.put( id, callbacks );
     }
-    workerPool.submit( new SendEvent( "load", objectRequestExchange, id, new byte[0] ) );
+    try {
+      SendEvent event = sendEvents.take();
+      event.setEvent( "load" );
+      event.setExchange( objectRequestExchange );
+      event.setRoutingKey( id );
+      workerPool.submit( event );
+    } catch ( InterruptedException e ) {
+      log.error( e.getMessage(), e );
+    }
   }
 
   @Override
   public void clear() {
-    workerPool.submit( new SendEvent( "clear", objectRequestExchange, "#", new byte[0] ) );
+    SendEvent event = null;
+    try {
+      event = sendEvents.take();
+      event.setEvent( "clear" );
+      event.setExchange( objectRequestExchange );
+      event.setRoutingKey( "#" );
+      workerPool.submit( event );
+    } catch ( InterruptedException e ) {
+      log.error( e.getMessage(), e );
+    }
   }
 
   @Override
@@ -216,8 +256,22 @@ public class RabbitMQAsyncCache implements AsyncCache {
       log.error( e.getMessage(), e );
     }
 
+    // For loading objects
+    for ( int i = 0; i < maxWorkers; i++ ) {
+      activeTasks.add( workerPool.submit( new ObjectLoadMonitor() ) );
+      sendEvents.add( new SendEvent() );
+    }
+
     activeTasks.add( workerPool.submit( new HeartbeatMonitor() ) );
-    workerPool.submit( new SendEvent( "ping", heartbeatExchange, "", new byte[0] ) );
+    try {
+      SendEvent event = sendEvents.take();
+      event.setEvent( "ping" );
+      event.setExchange( heartbeatExchange );
+      event.setRoutingKey( "" );
+      workerPool.submit( event );
+    } catch ( InterruptedException e ) {
+      log.error( e.getMessage(), e );
+    }
     delayTimer.scheduleAtFixedRate( new TimerTask() {
       @Override
       public void run() {
@@ -226,11 +280,6 @@ public class RabbitMQAsyncCache implements AsyncCache {
         }
       }
     }, 0, heartbeatInterval );
-
-    // For loading objects
-    for ( int i = 0; i < maxWorkers; i++ ) {
-      activeTasks.add( workerPool.submit( new ObjectLoadMonitor() ) );
-    }
   }
 
   @Override
@@ -338,19 +387,14 @@ public class RabbitMQAsyncCache implements AsyncCache {
       try {
         while ( true ) {
           QueueingConsumer.Delivery delivery = loadResponses.take();
-          long startTime = System.currentTimeMillis();
           AMQP.BasicProperties properties = delivery.getProperties();
           String type = properties.getType();
           String objectId = properties.getCorrelationId();
           if ( "response".equals( type ) ) {
             byte[] body = delivery.getBody();
-            Object obj;
+            Object obj = null;
             if ( body.length > 0 ) {
               try {
-                if ( debug ) {
-                  long interval = System.currentTimeMillis() - startTime;
-                  log.debug( "Before deserialize at " + interval + "ms" );
-                }
                 obj = deserialize( delivery.getBody() );
               } catch ( ClassNotFoundException e ) {
                 log.error( e.getMessage(), e );
@@ -359,12 +403,6 @@ public class RabbitMQAsyncCache implements AsyncCache {
                 log.error( e.getMessage(), e );
                 obj = e;
               }
-            } else {
-              obj = new NullObject();
-            }
-            if ( debug ) {
-              long interval = System.currentTimeMillis() - startTime;
-              log.debug( "Before callbacks at " + interval + "ms" );
             }
             List<AsyncCacheCallback> callbacks = objectLoadCallbacks.get( objectId );
             synchronized (callbacks) {
@@ -382,12 +420,6 @@ public class RabbitMQAsyncCache implements AsyncCache {
           } else {
             log.warn( "Invalid message type: '" + type + "': " + properties );
           }
-
-          long endTime = System.currentTimeMillis();
-          if ( debug ) {
-            long interval = endTime - startTime;
-            log.debug( "Load response processed in " + interval + "ms" );
-          }
         }
       } catch ( InterruptedException e ) {
       }
@@ -400,35 +432,69 @@ public class RabbitMQAsyncCache implements AsyncCache {
 
   class SendEvent implements Runnable {
 
-    String event;
-    String exchange;
-    String routingKey;
-    byte[] body;
+    String event = null;
+    String exchange = null;
+    String routingKey = "";
+    byte[] body = new byte[0];
+    Channel sendChannel = null;
     AMQP.BasicProperties properties = new AMQP.BasicProperties();
 
-    SendEvent( String event, String exchange, String routingKey, byte[] body ) {
-      this.event = event;
-      this.exchange = exchange;
-      this.routingKey = routingKey;
-      this.body = body;
+    SendEvent() {
+    }
 
-      properties.setType( event );
-      properties.setReplyTo( id );
+    SendEvent( String event, String exchange, String routingKey, byte[] body ) {
+      setEvent( event );
+      setExchange( exchange );
+      setRoutingKey( routingKey );
+      setBody( body );
+    }
+
+    public String getEvent() {
+      return event;
+    }
+
+    public void setEvent( String event ) {
+      this.event = event;
+    }
+
+    public String getExchange() {
+      return exchange;
+    }
+
+    public void setExchange( String exchange ) {
+      this.exchange = exchange;
+    }
+
+    public String getRoutingKey() {
+      return routingKey;
+    }
+
+    public void setRoutingKey( String routingKey ) {
+      this.routingKey = routingKey;
+    }
+
+    public byte[] getBody() {
+      return body;
+    }
+
+    public void setBody( byte[] body ) {
+      this.body = body;
     }
 
     @Override
     public void run() {
-      Channel sendChannel = null;
       try {
-        sendChannel = getConnection().createChannel();
-        sendChannel.basicPublish( exchange, routingKey, properties, body );
+        if ( null == sendChannel ) {
+          sendChannel = getConnection().createChannel();
+        }
+        if ( null != event && null != exchange ) {
+          properties.setType( event );
+          properties.setReplyTo( id );
+          sendChannel.basicPublish( exchange, routingKey, properties, body );
+          sendEvents.add( this );
+        }
       } catch ( IOException e ) {
         log.error( e.getMessage(), e );
-      } finally {
-        try {
-          sendChannel.close();
-        } catch ( Throwable t ) {
-        }
       }
 
     }

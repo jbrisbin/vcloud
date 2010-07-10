@@ -31,7 +31,7 @@ public class AsyncCacheProviderTest {
   static RabbitMQAsyncCache cache;
   static ConnectionFactory factory;
   static Connection connection;
-  static int runs = 5;
+  static int runs = 15;
   static CountDownLatch countDown = new CountDownLatch( runs );
 
   long totalTime = 0;

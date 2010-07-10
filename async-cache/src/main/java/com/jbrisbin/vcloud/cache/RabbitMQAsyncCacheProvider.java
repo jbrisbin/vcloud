@@ -86,6 +86,7 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
 
   protected BlockingQueue<QueueingConsumer.Delivery> objectRequests = new LinkedBlockingQueue<QueueingConsumer.Delivery>();
   protected QueueingConsumer requestsConsumer;
+  protected BlockingQueue<ObjectSendEvent> objectSendEvents = new LinkedBlockingQueue<ObjectSendEvent>();
 
   /**
    * Primary object cache.
@@ -189,6 +190,7 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
 
     for ( int i = 0; i < maxWorkers; i++ ) {
       activeTasks.add( workerPool.submit( new ObjectMonitor() ) );
+      objectSendEvents.add( new ObjectSendEvent() );
     }
   }
 
@@ -348,39 +350,57 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
 
   class ObjectSendEvent implements Runnable {
 
-    String correlationId;
+    String objectId;
     String replyTo;
     byte[] body;
+    Channel objectSendChannel = null;
 
-    ObjectSendEvent( String correlationId, String replyTo, byte[] body ) {
-      this.correlationId = correlationId;
+    ObjectSendEvent() {
+    }
+
+    ObjectSendEvent( String objectId, String replyTo, byte[] body ) {
+      this.objectId = objectId;
       this.replyTo = replyTo;
+      this.body = body;
+    }
+
+    public String getObjectId() {
+      return objectId;
+    }
+
+    public void setObjectId( String objectId ) {
+      this.objectId = objectId;
+    }
+
+    public String getReplyTo() {
+      return replyTo;
+    }
+
+    public void setReplyTo( String replyTo ) {
+      this.replyTo = replyTo;
+    }
+
+    public byte[] getBody() {
+      return body;
+    }
+
+    public void setBody( byte[] body ) {
       this.body = body;
     }
 
     @Override
     public void run() {
-      long startTime = System.currentTimeMillis();
-      Channel channel = null;
       try {
-        channel = getConnection().createChannel();
+        if ( null == objectSendChannel ) {
+          objectSendChannel = getConnection().createChannel();
+        }
         AMQP.BasicProperties properties = new AMQP.BasicProperties();
         properties.setType( "response" );
-        properties.setCorrelationId( correlationId );
+        properties.setCorrelationId( objectId );
         properties.setReplyTo( cacheNodeQueueName );
-        channel.basicPublish( "", replyTo, properties, body );
+        objectSendChannel.basicPublish( "", replyTo, properties, body );
       } catch ( IOException e ) {
         log.error( e.getMessage(), e );
-      } finally {
-        try {
-          channel.close();
-        } catch ( IOException e ) {
-        }
-        long endTime = System.currentTimeMillis();
-        if ( debug ) {
-          long interval = endTime - startTime;
-          log.debug( "Object sent in " + interval + "ms" );
-        }
       }
     }
   }
@@ -478,7 +498,11 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
             } else {
               log.warn( "No object with ID " + objectId + " found" );
             }
-            workerPool.execute( new ObjectSendEvent( objectId, replyTo, bytes ) );
+            ObjectSendEvent event = objectSendEvents.take();
+            event.setObjectId( objectId );
+            event.setReplyTo( replyTo );
+            event.setBody( bytes );
+            workerPool.execute( event );
           } else if ( "clear".equals( type ) ) {
             if ( objectId.equals( "#" ) ) {
               objectCache.clear();
