@@ -13,7 +13,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.Serializable;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 
@@ -31,7 +32,7 @@ public class AsyncCacheProviderTest {
   static RabbitMQAsyncCache cache;
   static ConnectionFactory factory;
   static Connection connection;
-  static int runs = 15;
+  static int runs = 50;
   static CountDownLatch countDown = new CountDownLatch( runs );
 
   long totalTime = 0;
@@ -50,26 +51,23 @@ public class AsyncCacheProviderTest {
   }
 
   @Test
-  public void testStoreObject() throws IOException {
-    TestObject obj = new TestObject();
-    StringBuffer data = new StringBuffer();
-    int size = rand.nextInt( 128 );
-    for ( int i = 0; i < size; i++ ) {
-      data.append( ALPHA.charAt( rand.nextInt( NUM_ALPHA ) ) );
-    }
-    obj.setData( data.toString() );
-    cache.add( "test.object", obj );
-
-    try {
-      Thread.sleep( 1000 );
-    } catch ( InterruptedException e ) {
-    }
-  }
-
-  @Test
-  public void testLoadObject() throws InterruptedException {
+  public void testStoreAndLoadObject() throws IOException, InterruptedException {
     for ( int i = 0; i < runs; i++ ) {
-      cache.load( "test.object", new AsyncCacheCallback() {
+      TestObject obj = new TestObject();
+      StringBuffer data = new StringBuffer();
+      int size = rand.nextInt( 128 );
+      for ( int j = 0; j < size; j++ ) {
+        data.append( ALPHA.charAt( rand.nextInt( NUM_ALPHA ) ) );
+      }
+      obj.setData( data.toString() );
+      String id = "test.object." + i;
+      cache.add( id, obj );
+    }
+    Thread.sleep( 1000 );
+
+    for ( int i = 0; i < runs; i++ ) {
+      final String id = "test.object." + i;
+      cache.load( id, new AsyncCacheCallback() {
 
         long startTime = System.currentTimeMillis();
 
@@ -85,6 +83,7 @@ public class AsyncCacheProviderTest {
           }
           log.info( "Got object " + obj + " in " + interval + "ms" );
           countDown.countDown();
+          log.info( "Waiting on " + countDown.getCount() + " more..." );
         }
 
         @Override
@@ -92,6 +91,7 @@ public class AsyncCacheProviderTest {
           log.error( t.getMessage(), t );
         }
       } );
+      //Thread.sleep( 300 );
     }
     countDown.await();
     log.info( "Average time: " + new Double( (totalTime / runs) ) );
@@ -102,28 +102,6 @@ public class AsyncCacheProviderTest {
   @AfterClass
   public static void stop() throws IOException {
     connection.close();
-  }
-
-  protected byte[] serialize( Object obj ) throws IOException {
-    ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-    ObjectOutputStream oout = new ObjectOutputStream( bytesOut );
-    oout.writeObject( obj );
-    oout.flush();
-    oout.close();
-    bytesOut.flush();
-    bytesOut.close();
-
-    return bytesOut.toByteArray();
-  }
-
-  protected Object deserialize( byte[] bytes ) throws IOException, ClassNotFoundException {
-    ByteArrayInputStream bytesIn = new ByteArrayInputStream( bytes );
-    ObjectInputStream oin = new ObjectInputStream( bytesIn );
-    Object obj = oin.readObject();
-    oin.close();
-    bytesIn.close();
-
-    return obj;
   }
 
   static class TestObject implements Serializable {
@@ -139,9 +117,18 @@ public class AsyncCacheProviderTest {
     }
 
     @Override
+    public boolean equals( Object obj ) {
+      if ( obj instanceof TestObject ) {
+        return ((TestObject) obj).getData().equals( data );
+      } else {
+        return false;
+      }
+    }
+
+    @Override
     public String toString() {
       String s = super.toString();
-      return s + ",data=" + data.substring( 0, 16 ) + "...";
+      return s + ",data=" + (data.length() > 16 ? data.substring( 0, 16 ) : data) + "...";
     }
 
   }

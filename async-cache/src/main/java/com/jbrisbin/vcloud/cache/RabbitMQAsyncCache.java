@@ -21,8 +21,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.io.*;
-import java.util.*;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -86,9 +89,8 @@ public class RabbitMQAsyncCache implements AsyncCache {
    * Event handlers waiting on objects to be loaded.
    */
   protected ConcurrentSkipListMap<String, List<AsyncCacheCallback>> objectLoadCallbacks = new ConcurrentSkipListMap<String, List<AsyncCacheCallback>>();
-  protected BlockingQueue<QueueingConsumer.Delivery> loadResponses = new LinkedBlockingQueue<QueueingConsumer.Delivery>();
-  protected QueueingConsumer loadConsumer;
-  protected BlockingQueue<SendEvent> sendEvents = new LinkedBlockingQueue<SendEvent>();
+  protected BlockingQueue<ObjectMessage> objectMessages = new LinkedBlockingQueue<ObjectMessage>();
+  protected BlockingQueue<CommandMessage> commandMessages = new LinkedBlockingQueue<CommandMessage>();
 
   public RabbitMQAsyncCache() {
   }
@@ -141,6 +143,7 @@ public class RabbitMQAsyncCache implements AsyncCache {
 
   public void setMaxWorkers( int maxWorkers ) {
     this.maxWorkers = maxWorkers;
+    workerPool = Executors.newFixedThreadPool( maxWorkers * 2 );
   }
 
   public long getLoadTimeout() {
@@ -159,16 +162,8 @@ public class RabbitMQAsyncCache implements AsyncCache {
   @Override
   public void add( String id, Object obj, long expiry ) {
     try {
-      byte[] body = serialize( obj );
-      SendEvent event = sendEvents.take();
-      event.setEvent( "store" );
-      event.setExchange( objectRequestExchange );
-      event.setRoutingKey( id );
-      event.setBody( body );
-      workerPool.submit( event );
+      objectMessages.add( new ObjectMessage( id, objectRequestExchange, id, obj ) );
     } catch ( IOException e ) {
-      log.error( e.getMessage(), e );
-    } catch ( InterruptedException e ) {
       log.error( e.getMessage(), e );
     }
   }
@@ -180,31 +175,13 @@ public class RabbitMQAsyncCache implements AsyncCache {
 
   @Override
   public void remove( String id ) {
-    try {
-      SendEvent event = sendEvents.take();
-      event.setEvent( "clear" );
-      event.setExchange( objectRequestExchange );
-      event.setRoutingKey( id );
-      workerPool.submit( event );
-    } catch ( InterruptedException e ) {
-      log.error( e.getMessage(), e );
-    }
+    commandMessages.add( new CommandMessage( "clear", objectRequestExchange, id ) );
   }
 
   @Override
   public void remove( String id, long delay ) {
-    try {
-      SendEvent event = sendEvents.take();
-      event.setEvent( "clear" );
-      event.setExchange( objectRequestExchange );
-      event.setRoutingKey( id );
-      Map<String, Object> headers = new LinkedHashMap<String, Object>();
-      headers.put( "expiration", delay );
-      event.properties.setHeaders( headers );
-      workerPool.submit( event );
-    } catch ( InterruptedException e ) {
-      log.error( e.getMessage(), e );
-    }
+    // TODO: implement delay in removing object
+    remove( id );
   }
 
   @Override
@@ -216,29 +193,12 @@ public class RabbitMQAsyncCache implements AsyncCache {
       callbacks.add( callback );
       objectLoadCallbacks.put( id, callbacks );
     }
-    try {
-      SendEvent event = sendEvents.take();
-      event.setEvent( "load" );
-      event.setExchange( objectRequestExchange );
-      event.setRoutingKey( id );
-      workerPool.submit( event );
-    } catch ( InterruptedException e ) {
-      log.error( e.getMessage(), e );
-    }
+    commandMessages.add( new CommandMessage( "load", objectRequestExchange, id ) );
   }
 
   @Override
   public void clear() {
-    SendEvent event = null;
-    try {
-      event = sendEvents.take();
-      event.setEvent( "clear" );
-      event.setExchange( objectRequestExchange );
-      event.setRoutingKey( "#" );
-      workerPool.submit( event );
-    } catch ( InterruptedException e ) {
-      log.error( e.getMessage(), e );
-    }
+    commandMessages.add( new CommandMessage( "clear", objectRequestExchange, "#" ) );
   }
 
   @Override
@@ -249,29 +209,30 @@ public class RabbitMQAsyncCache implements AsyncCache {
       Channel channel = getConnection().createChannel();
       channel.exchangeDeclare( objectRequestExchange, "topic", true, false, null );
       channel.queueDeclare( id, true, false, true, null );
-
-      loadConsumer = new QueueingConsumer( channel, loadResponses );
-      channel.basicConsume( id, loadConsumer );
     } catch ( IOException e ) {
       log.error( e.getMessage(), e );
     }
 
     // For loading objects
     for ( int i = 0; i < maxWorkers; i++ ) {
-      activeTasks.add( workerPool.submit( new ObjectLoadMonitor() ) );
-      sendEvents.add( new SendEvent() );
+      activeTasks.add( workerPool.submit( new ObjectSender() ) );
+      activeTasks.add( workerPool.submit( new CommandSender() ) );
+      workerPool.submit( new Runnable() {
+        @Override
+        public void run() {
+          try {
+            Channel channel = getConnection().createChannel();
+            ObjectLoadMonitor loadMonitor = new ObjectLoadMonitor( channel );
+            channel.basicConsume( id, loadMonitor );
+          } catch ( IOException e ) {
+            log.error( e.getMessage(), e );
+          }
+        }
+      } );
     }
 
     activeTasks.add( workerPool.submit( new HeartbeatMonitor() ) );
-    try {
-      SendEvent event = sendEvents.take();
-      event.setEvent( "ping" );
-      event.setExchange( heartbeatExchange );
-      event.setRoutingKey( "" );
-      workerPool.submit( event );
-    } catch ( InterruptedException e ) {
-      log.error( e.getMessage(), e );
-    }
+    commandMessages.add( new CommandMessage( "ping", heartbeatExchange, "" ) );
     delayTimer.scheduleAtFixedRate( new TimerTask() {
       @Override
       public void run() {
@@ -317,32 +278,6 @@ public class RabbitMQAsyncCache implements AsyncCache {
     return connection;
   }
 
-  protected byte[] serialize( Object obj ) throws IOException {
-    ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-    ObjectOutputStream oout = new ObjectOutputStream( bytesOut );
-    oout.writeObject( obj );
-    oout.flush();
-    oout.close();
-    bytesOut.flush();
-    bytesOut.close();
-
-    return bytesOut.toByteArray();
-  }
-
-  protected Object deserialize( byte[] bytes ) throws IOException, ClassNotFoundException {
-    ByteArrayInputStream bytesIn = new ByteArrayInputStream( bytes );
-    ObjectInputStream oin = new ObjectInputStream( bytesIn );
-    Object obj = oin.readObject();
-    oin.close();
-    bytesIn.close();
-
-    if ( debug ) {
-      log.debug( "Deserialized " + bytes.length + " bytes for object " + obj );
-    }
-
-    return obj;
-  }
-
   class HeartbeatMonitor implements Runnable {
     @Override
     public void run() {
@@ -381,125 +316,114 @@ public class RabbitMQAsyncCache implements AsyncCache {
     }
   }
 
-  class ObjectLoadMonitor implements Runnable {
+  class ObjectSender implements Runnable {
+
+    Channel objectSendChannel = null;
+    AMQP.BasicProperties properties = new AMQP.BasicProperties();
+
+    ObjectSender() {
+      properties.setType( "store" );
+      properties.setReplyTo( id );
+    }
+
     @Override
     public void run() {
-      try {
-        while ( true ) {
-          QueueingConsumer.Delivery delivery = loadResponses.take();
-          AMQP.BasicProperties properties = delivery.getProperties();
-          String type = properties.getType();
-          String objectId = properties.getCorrelationId();
-          if ( "response".equals( type ) ) {
-            byte[] body = delivery.getBody();
-            Object obj = null;
-            if ( body.length > 0 ) {
-              try {
-                obj = deserialize( delivery.getBody() );
-              } catch ( ClassNotFoundException e ) {
-                log.error( e.getMessage(), e );
-                obj = e;
-              } catch ( IOException e ) {
-                log.error( e.getMessage(), e );
-                obj = e;
-              }
-              List<AsyncCacheCallback> callbacks = objectLoadCallbacks.get( objectId );
-              synchronized (callbacks) {
-                if ( null != callbacks ) {
-                  for ( AsyncCacheCallback callback : callbacks ) {
-                    if ( obj instanceof Throwable ) {
-                      callback.onError( (Throwable) obj );
-                    } else {
-                      callback.onObjectLoad( obj );
-                    }
-                  }
-                  callbacks.clear();
+      while ( true ) {
+        try {
+          ObjectMessage msg = objectMessages.take();
+          if ( null == objectSendChannel ) {
+            objectSendChannel = getConnection().createChannel();
+          }
+          properties.setCorrelationId( msg.getId() );
+          objectSendChannel
+              .basicPublish( objectRequestExchange, msg.getRoutingKey(), properties,
+                  msg.getBody() );
+        } catch ( IOException e ) {
+          log.error( e.getMessage(), e );
+        } catch ( InterruptedException e ) {
+        }
+      }
+    }
+  }
+
+  class CommandSender implements Runnable {
+
+    Channel commandSendChannel = null;
+    AMQP.BasicProperties properties = new AMQP.BasicProperties();
+
+    CommandSender() {
+    }
+
+    @Override
+    public void run() {
+      while ( true ) {
+        try {
+          CommandMessage msg = commandMessages.take();
+          if ( null == commandSendChannel ) {
+            commandSendChannel = getConnection().createChannel();
+          }
+          properties.setType( msg.getType() );
+          properties.setReplyTo( id );
+          commandSendChannel.basicPublish( msg.getExchange(), msg.getRoutingKey(), properties,
+              msg.getBody() );
+        } catch ( IOException e ) {
+          log.error( e.getMessage(), e );
+        } catch ( InterruptedException e ) {
+        }
+      }
+    }
+  }
+
+  class ObjectLoadMonitor extends DefaultConsumer {
+
+    Channel loadChannel = null;
+
+    ObjectLoadMonitor( Channel loadChannel ) {
+      super( loadChannel );
+    }
+
+    @Override
+    public void handleDelivery( String consumerTag, Envelope envelope,
+                                AMQP.BasicProperties properties,
+                                byte[] body ) throws IOException {
+      String type = properties.getType();
+      String objectId = properties.getCorrelationId();
+      if ( "response".equals( type ) ) {
+        Object obj = null;
+        if ( body.length > 0 ) {
+          try {
+            obj = ObjectMessage.deserialize( body );
+          } catch ( ClassNotFoundException e ) {
+            log.error( e.getMessage(), e );
+            obj = e;
+          } catch ( IOException e ) {
+            log.error( e.getMessage(), e );
+            obj = e;
+          }
+          List<AsyncCacheCallback> callbacks = objectLoadCallbacks.get( objectId );
+          synchronized (callbacks) {
+            if ( null != callbacks ) {
+              for ( AsyncCacheCallback callback : callbacks ) {
+                if ( obj instanceof Throwable ) {
+                  callback.onError( (Throwable) obj );
+                } else {
+                  callback.onObjectLoad( obj );
                 }
               }
-            } else {
-              // TODO: Handle null messages
+              callbacks.clear();
             }
-          } else {
-            log.warn( "Invalid message type: '" + type + "': " + properties );
           }
+        } else {
+          // TODO: Handle null messages
         }
-      } catch ( InterruptedException e ) {
+      } else {
+        log.warn( "Invalid message type: '" + type + "': " + properties );
       }
     }
   }
 
   class NullObject {
     // To represent <NULL>
-  }
-
-  class SendEvent implements Runnable {
-
-    String event = null;
-    String exchange = null;
-    String routingKey = "";
-    byte[] body = new byte[0];
-    Channel sendChannel = null;
-    AMQP.BasicProperties properties = new AMQP.BasicProperties();
-
-    SendEvent() {
-    }
-
-    SendEvent( String event, String exchange, String routingKey, byte[] body ) {
-      setEvent( event );
-      setExchange( exchange );
-      setRoutingKey( routingKey );
-      setBody( body );
-    }
-
-    public String getEvent() {
-      return event;
-    }
-
-    public void setEvent( String event ) {
-      this.event = event;
-    }
-
-    public String getExchange() {
-      return exchange;
-    }
-
-    public void setExchange( String exchange ) {
-      this.exchange = exchange;
-    }
-
-    public String getRoutingKey() {
-      return routingKey;
-    }
-
-    public void setRoutingKey( String routingKey ) {
-      this.routingKey = routingKey;
-    }
-
-    public byte[] getBody() {
-      return body;
-    }
-
-    public void setBody( byte[] body ) {
-      this.body = body;
-    }
-
-    @Override
-    public void run() {
-      try {
-        if ( null == sendChannel ) {
-          sendChannel = getConnection().createChannel();
-        }
-        if ( null != event && null != exchange ) {
-          properties.setType( event );
-          properties.setReplyTo( id );
-          sendChannel.basicPublish( exchange, routingKey, properties, body );
-          sendEvents.add( this );
-        }
-      } catch ( IOException e ) {
-        log.error( e.getMessage(), e );
-      }
-
-    }
   }
 
 }

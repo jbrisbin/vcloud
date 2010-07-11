@@ -21,7 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.io.*;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -84,9 +84,8 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
    */
   protected int maxWorkers = 3;
 
-  protected BlockingQueue<QueueingConsumer.Delivery> objectRequests = new LinkedBlockingQueue<QueueingConsumer.Delivery>();
-  protected QueueingConsumer requestsConsumer;
-  protected BlockingQueue<ObjectSendEvent> objectSendEvents = new LinkedBlockingQueue<ObjectSendEvent>();
+  protected BlockingQueue<ObjectMessage> objectMessages = new LinkedBlockingQueue<ObjectMessage>();
+  protected BlockingQueue<CommandMessage> commandMessages = new LinkedBlockingQueue<CommandMessage>();
 
   /**
    * Primary object cache.
@@ -163,9 +162,6 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
       channel.exchangeDeclare( objectRequestExchange, "topic", true, false, null );
       channel.queueDeclare( cacheNodeQueueName, true, false, true, null );
       channel.queueBind( cacheNodeQueueName, objectRequestExchange, "#" );
-      requestsConsumer = new QueueingConsumer( channel, objectRequests );
-      channel.basicConsume( cacheNodeQueueName, true, requestsConsumer );
-
       channel.exchangeDeclare( heartbeatExchange, "fanout", true, false, null );
     } catch ( IOException e ) {
       log.error( e.getMessage(), e );
@@ -175,7 +171,7 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
     delayTimer.scheduleAtFixedRate( new TimerTask() {
       @Override
       public void run() {
-        workerPool.execute( new SendEvent( "ping", heartbeatExchange, "", id.getBytes() ) );
+        commandMessages.add( new CommandMessage( "ping", heartbeatExchange, "" ) );
       }
     }, 0, heartbeatInterval );
     delayTimer.scheduleAtFixedRate( new TimerTask() {
@@ -189,8 +185,20 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
     }, heartbeatInterval, heartbeatInterval );
 
     for ( int i = 0; i < maxWorkers; i++ ) {
-      activeTasks.add( workerPool.submit( new ObjectMonitor() ) );
-      objectSendEvents.add( new ObjectSendEvent() );
+      activeTasks.add( workerPool.submit( new ObjectSender() ) );
+      activeTasks.add( workerPool.submit( new CommandSender() ) );
+      workerPool.submit( new Runnable() {
+        @Override
+        public void run() {
+          try {
+            Channel channel = getConnection().createChannel();
+            ObjectMonitor monitor = new ObjectMonitor( channel );
+            channel.basicConsume( cacheNodeQueueName, monitor );
+          } catch ( IOException e ) {
+            log.error( e.getMessage(), e );
+          }
+        }
+      } );
     }
   }
 
@@ -226,7 +234,7 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
   public void add( String id, Object obj ) {
     byte[] bytes = new byte[0];
     try {
-      bytes = serialize( obj );
+      bytes = ObjectMessage.serialize( obj );
     } catch ( IOException e ) {
       log.error( e.getMessage(), e );
     }
@@ -237,7 +245,7 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
   public void add( String id, Object obj, long expiry ) {
     byte[] bytes = new byte[0];
     try {
-      bytes = serialize( obj );
+      bytes = ObjectMessage.serialize( obj );
     } catch ( IOException e ) {
       log.error( e.getMessage(), e );
     }
@@ -291,116 +299,61 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
     return connection;
   }
 
-  protected byte[] serialize( Object obj ) throws IOException {
-    ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-    ObjectOutputStream oout = new ObjectOutputStream( bytesOut );
-    oout.writeObject( obj );
-    oout.flush();
-    oout.close();
-    bytesOut.flush();
-    bytesOut.close();
+  class ObjectSender implements Runnable {
 
-    return bytesOut.toByteArray();
-  }
+    Channel objectSendChannel = null;
+    AMQP.BasicProperties properties = new AMQP.BasicProperties();
 
-  protected Object deserialize( byte[] bytes ) throws IOException, ClassNotFoundException {
-    ByteArrayInputStream bytesIn = new ByteArrayInputStream( bytes );
-    ObjectInputStream oin = new ObjectInputStream( bytesIn );
-    Object obj = oin.readObject();
-    oin.close();
-    bytesIn.close();
-
-    return obj;
-  }
-
-  class SendEvent implements Runnable {
-
-    String event;
-    String exchange;
-    String routingKey;
-    byte[] body;
-
-    SendEvent( String event, String exchange, String routingKey, byte[] body ) {
-      this.event = event;
-      this.exchange = exchange;
-      this.routingKey = routingKey;
-      this.body = body;
+    ObjectSender() {
+      properties.setType( "response" );
+      properties.setReplyTo( cacheNodeQueueName );
     }
 
     @Override
     public void run() {
-      AMQP.BasicProperties properties = new AMQP.BasicProperties();
-      properties.setType( event );
-
-      Channel channel = null;
-      try {
-        channel = getConnection().createChannel();
-        channel.basicPublish( exchange, routingKey, properties, body );
-      } catch ( IOException e ) {
-        log.error( e.getMessage(), e );
-      } finally {
+      while ( true ) {
         try {
-          channel.close();
-        } catch ( Throwable t ) {
+          ObjectMessage msg = objectMessages.take();
+          if ( null == objectSendChannel ) {
+            objectSendChannel = getConnection().createChannel();
+          }
+          properties.setCorrelationId( msg.getId() );
+          if ( debug ) {
+            log.debug( "Sending object " + msg.getId() );
+          }
+          objectSendChannel.basicPublish( "", msg.getRoutingKey(), properties, msg.getBody() );
+        } catch ( IOException e ) {
+          log.error( e.getMessage(), e );
+        } catch ( InterruptedException e ) {
         }
       }
-
     }
   }
 
-  class ObjectSendEvent implements Runnable {
+  class CommandSender implements Runnable {
 
-    String objectId;
-    String replyTo;
-    byte[] body;
-    Channel objectSendChannel = null;
+    Channel commandSendChannel = null;
+    AMQP.BasicProperties properties = new AMQP.BasicProperties();
 
-    ObjectSendEvent() {
-    }
-
-    ObjectSendEvent( String objectId, String replyTo, byte[] body ) {
-      this.objectId = objectId;
-      this.replyTo = replyTo;
-      this.body = body;
-    }
-
-    public String getObjectId() {
-      return objectId;
-    }
-
-    public void setObjectId( String objectId ) {
-      this.objectId = objectId;
-    }
-
-    public String getReplyTo() {
-      return replyTo;
-    }
-
-    public void setReplyTo( String replyTo ) {
-      this.replyTo = replyTo;
-    }
-
-    public byte[] getBody() {
-      return body;
-    }
-
-    public void setBody( byte[] body ) {
-      this.body = body;
+    CommandSender() {
     }
 
     @Override
     public void run() {
-      try {
-        if ( null == objectSendChannel ) {
-          objectSendChannel = getConnection().createChannel();
+      while ( true ) {
+        try {
+          CommandMessage msg = commandMessages.take();
+          if ( null == commandSendChannel ) {
+            commandSendChannel = getConnection().createChannel();
+          }
+          properties.setType( msg.getType() );
+          properties.setReplyTo( id );
+          commandSendChannel.basicPublish( msg.getExchange(), msg.getRoutingKey(), properties,
+              msg.getBody() );
+        } catch ( IOException e ) {
+          log.error( e.getMessage(), e );
+        } catch ( InterruptedException e ) {
         }
-        AMQP.BasicProperties properties = new AMQP.BasicProperties();
-        properties.setType( "response" );
-        properties.setCorrelationId( objectId );
-        properties.setReplyTo( cacheNodeQueueName );
-        objectSendChannel.basicPublish( "", replyTo, properties, body );
-      } catch ( IOException e ) {
-        log.error( e.getMessage(), e );
       }
     }
   }
@@ -432,7 +385,7 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
                 .toString() );
           }
           if ( "ping".equals( type ) ) {
-            workerPool.execute( new SendEvent( "pong", heartbeatExchange, "", id.getBytes() ) );
+            commandMessages.add( new CommandMessage( "pong", heartbeatExchange, id ) );
           } else if ( "pong".equals( type ) ) {
             byte[] body = delivery.getBody();
             if ( body.length > 0 ) {
@@ -456,82 +409,75 @@ public class RabbitMQAsyncCacheProvider implements AsyncCache {
     }
   }
 
-  class ObjectMonitor implements Runnable {
-    @Override
-    public void run() {
-      try {
-        while ( true ) {
-          QueueingConsumer.Delivery delivery = objectRequests.take();
-          long startTime = System.currentTimeMillis();
-          AMQP.BasicProperties properties = delivery.getProperties();
-          String correlationId = properties.getCorrelationId();
-          String type = properties.getType();
-          String replyTo = properties.getReplyTo();
-          String objectId = delivery.getEnvelope().getRoutingKey();
-          if ( debug ) {
-            log.debug( "Received " + type.toUpperCase() + " object message: " + properties
-                .toString() );
-          }
-          if ( "store".equals( type ) ) {
-            byte[] bytes = delivery.getBody();
-            if ( null != bytes && bytes.length > 0 ) {
-              Map<String, Object> headers = properties.getHeaders();
-              if ( null != headers && headers.containsKey( "expiration" ) ) {
-                long expiry = Long.parseLong( headers.get( "expiration" ).toString() );
-                add( objectId, bytes, expiry );
-              } else {
-                add( objectId, bytes, Long.MAX_VALUE );
-              }
-            } else {
-              log.warn( "Won't add a NULL object: " + objectId );
-            }
-          } else if ( "load".equals( type ) ) {
-            CacheEntry entry = objectCache.get( objectId );
-            byte[] bytes = new byte[0];
-            if ( null != entry ) {
-              long interval = (System.currentTimeMillis() - entry.createdAt);
-              if ( interval < entry.expiration ) {
-                bytes = entry.value;
-              } else {
-                remove( objectId );
-              }
-            } else {
-              log.warn( "No object with ID " + objectId + " found" );
-            }
-            ObjectSendEvent event = objectSendEvents.take();
-            event.setObjectId( objectId );
-            event.setReplyTo( replyTo );
-            event.setBody( bytes );
-            workerPool.execute( event );
-          } else if ( "clear".equals( type ) ) {
-            if ( objectId.equals( "#" ) ) {
-              objectCache.clear();
-            } else {
-              Map<String, Object> headers = properties.getHeaders();
-              if ( null != headers && headers.containsKey( "expiration" ) ) {
-                long expiry = Long.parseLong( headers.get( "expiration" ).toString() );
-                remove( objectId, expiry );
-              } else {
-                remove( objectId );
-              }
-            }
-          } else if ( "children".equals( type ) ) {
-            List<Object> childIds = new ArrayList<Object>();
-            for ( CacheEntry entry : objectCache.values() ) {
-              if ( entry.parent.equals( objectId ) ) {
-                childIds.add( entry.value );
-              }
-            }
-          }
+  class ObjectMonitor extends DefaultConsumer {
 
-          long endTime = System.currentTimeMillis();
-          if ( debug ) {
-            long interval = endTime - startTime;
-            log.debug( "Processed message in " + interval + "ms" );
+    ObjectMonitor( Channel channel ) {
+      super( channel );
+    }
+
+    @Override
+    public void handleDelivery( String consumerTag, Envelope envelope,
+                                AMQP.BasicProperties properties,
+                                byte[] body ) throws IOException {
+
+      String correlationId = properties.getCorrelationId();
+      String type = properties.getType();
+      String replyTo = properties.getReplyTo();
+      String objectId = envelope.getRoutingKey();
+      if ( debug ) {
+        log.debug( "Received " + type.toUpperCase() + " object message: " + properties
+            .toString() );
+      }
+      if ( "store".equals( type ) ) {
+        if ( body.length > 0 ) {
+          Map<String, Object> headers = properties.getHeaders();
+          if ( null != headers && headers.containsKey( "expiration" ) ) {
+            long expiry = Long.parseLong( headers.get( "expiration" ).toString() );
+            add( objectId, body, expiry );
+          } else {
+            add( objectId, body, Long.MAX_VALUE );
+          }
+        } else {
+          log.warn( "Won't add a NULL object: " + objectId );
+        }
+      } else if ( "load".equals( type ) ) {
+        CacheEntry entry = objectCache.get( objectId );
+        byte[] bytes = new byte[0];
+        if ( null != entry ) {
+          long interval = (System.currentTimeMillis() - entry.createdAt);
+          if ( interval < entry.expiration ) {
+            bytes = entry.value;
+          } else {
+            remove( objectId );
+          }
+        } else {
+          log.warn( "No object with ID " + objectId + " found" );
+        }
+        try {
+          ObjectMessage msg = new ObjectMessage( objectId, "", replyTo, bytes );
+          objectMessages.add( msg );
+        } catch ( ClassNotFoundException e ) {
+          log.error( e.getMessage(), e );
+        }
+      } else if ( "clear".equals( type ) ) {
+        if ( objectId.equals( "#" ) ) {
+          objectCache.clear();
+        } else {
+          Map<String, Object> headers = properties.getHeaders();
+          if ( null != headers && headers.containsKey( "expiration" ) ) {
+            long expiry = Long.parseLong( headers.get( "expiration" ).toString() );
+            remove( objectId, expiry );
+          } else {
+            remove( objectId );
           }
         }
-      } catch ( InterruptedException e ) {
-        // IGNORED
+      } else if ( "children".equals( type ) ) {
+        List<Object> childIds = new ArrayList<Object>();
+        for ( CacheEntry entry : objectCache.values() ) {
+          if ( entry.parent.equals( objectId ) ) {
+            childIds.add( entry.value );
+          }
+        }
       }
     }
   }
