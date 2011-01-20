@@ -35,6 +35,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
   private String exchange = "vcloud.logging.events";
   private String appenderId = System.getProperty("HOSTNAME");
   private String queueNameFormatString = "%s.%s";
+  private String routingString = null;
   private ExecutorService workerPool = Executors.newCachedThreadPool();
 
   public RabbitMQAppender() {
@@ -124,6 +125,14 @@ public class RabbitMQAppender extends AppenderSkeleton {
     return queueNameFormatString;
   }
 
+  public String getRouteString() {
+      return this.routingString;
+  }
+
+  public void setRouteString(String route) {
+      this.routingString = route;
+  }
+
   public void setQueueNameFormatString(String queueNameFormatString) {
     this.queueNameFormatString = queueNameFormatString;
   }
@@ -207,7 +216,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
     public LoggingEvent call() throws Exception {
       String id = String.format("%s:%s", appenderId, System.currentTimeMillis());
-      String routingKey = String.format(queueNameFormatString, event.getLevel().toString(), event.getLoggerName());
+      String routingKey = getRoutKey();
 
       AMQP.BasicProperties props = new AMQP.BasicProperties();
       props.setCorrelationId(id);
@@ -218,5 +227,13 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
       return event;
     }
+
+      private String getRoutKey() {
+          if(getRouteString() == null) {
+              return String.format(queueNameFormatString, event.getLevel().toString(), event.getLoggerName());
+          } else {
+              return getRouteString();
+          }
+      }
   }
 }
