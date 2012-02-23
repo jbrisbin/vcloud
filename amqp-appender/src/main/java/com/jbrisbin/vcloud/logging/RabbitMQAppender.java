@@ -1,28 +1,25 @@
 package com.jbrisbin.vcloud.logging;
 
-import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-import org.apache.log4j.AppenderSkeleton;
-import org.apache.log4j.Layout;
-import org.apache.log4j.spi.LoggingEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.util.Calendar;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import org.apache.log4j.AppenderSkeleton;
+import org.apache.log4j.Layout;
+import org.apache.log4j.spi.ErrorCode;
+import org.apache.log4j.spi.LoggingEvent;
+
 /**
  * @author Jon Brisbin <jon.brisbin@npcinternational.com>
  */
 public class RabbitMQAppender extends AppenderSkeleton {
 
-  private final Logger log = LoggerFactory.getLogger(getClass());
-  private final boolean DEBUG = log.isDebugEnabled();
   private ConnectionFactory factory = new ConnectionFactory();
   private Connection connection = null;
   private Channel channel = null;
@@ -101,14 +98,14 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
   public void setExchange(String exchange) {
     this.exchange = exchange;
-    Channel mq = null;
+    Channel mq;
     try {
       mq = getChannel();
       synchronized (mq) {
         mq.exchangeDeclare(exchange, "topic", true, false, null);
       }
     } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      errorHandler.error(e.getMessage(), e, ErrorCode.GENERIC_FAILURE);
     }
   }
 
@@ -133,7 +130,7 @@ public class RabbitMQAppender extends AppenderSkeleton {
     try {
       workerPool.submit(new AppenderPublisher(event));
     } catch (IOException e) {
-      log.error(e.getMessage(), e);
+      errorHandler.error(e.getMessage(), e, ErrorCode.WRITE_FAILURE);
     }
   }
 
@@ -142,14 +139,14 @@ public class RabbitMQAppender extends AppenderSkeleton {
       try {
         channel.close();
       } catch (IOException e) {
-        log.error(e.getMessage(), e);
+        errorHandler.error(e.getMessage(), e, ErrorCode.CLOSE_FAILURE);
       }
     }
     if (null != connection && connection.isOpen()) {
       try {
         connection.close();
       } catch (IOException e) {
-        log.error(e.getMessage(), e);
+        errorHandler.error(e.getMessage(), e, ErrorCode.CLOSE_FAILURE);
       }
     }
   }
@@ -168,9 +165,6 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
   protected Channel getChannel() throws IOException {
     if (null == channel || !channel.isOpen()) {
-      if (DEBUG) {
-        log.debug("Opening a new channel...");
-      }
       channel = getConnection().createChannel();
     }
     return channel;
@@ -178,9 +172,6 @@ public class RabbitMQAppender extends AppenderSkeleton {
 
   protected Connection getConnection() throws IOException {
     if (null == connection || !connection.isOpen()) {
-      if (DEBUG) {
-        log.debug("Opening a new connection...");
-      }
       connection = factory.newConnection();
     }
     return connection;
